@@ -284,6 +284,12 @@ export default function TheGateClient({ userEmail }: { userEmail: string }) {
                     You may submit again.
                   </p>
                 )}
+                {result.status === "error_qualifier" && (
+                  <p className="text-muted-foreground font-sans text-sm">
+                    The automated analysis system encountered a temporary issue, but your submission has been 
+                    forwarded to the Human Curation Council for review. You will be notified when the review is complete.
+                  </p>
+                )}
 
                 <div className="flex gap-4 justify-center pt-4">
                   {(result.status === "rejected_sieve" || result.status === "rejected_qualifier") && (

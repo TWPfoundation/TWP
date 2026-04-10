@@ -137,11 +137,14 @@ export async function POST(request: NextRequest) {
 
     // 6. If Sieve passes → Run Tier 2: AI Qualifier
     let qualifierResult;
+    let qualifierError: string | null = null;
     if (sieveResult.passed && assessment) {
       try {
+        console.log("[Gate] Running Tier 2 Qualifier for submission:", submission.id);
         qualifierResult = await runQualifier(essay_text);
+        console.log("[Gate] Qualifier result:", JSON.stringify(qualifierResult, null, 2));
 
-        await supabaseAdmin
+        const { error: updateError } = await supabaseAdmin
           .from("gate_assessments")
           .update({
             tier2_status: qualifierResult.passed ? "passed" : "failed",
@@ -156,9 +159,38 @@ export async function POST(request: NextRequest) {
             final_status: qualifierResult.passed ? "review" : "failed",
           })
           .eq("id", assessment.id);
+
+        if (updateError) {
+          console.error("[Gate] Qualifier DB update error:", updateError);
+          qualifierError = `DB update failed: ${updateError.message}`;
+        }
       } catch (err) {
-        console.error("Qualifier error:", err);
-        qualifierResult = null;
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.error("[Gate] Qualifier execution CRASHED:", errorMsg, err);
+        qualifierError = errorMsg;
+        
+        // Don't treat a crash as a rejection — forward to HCC review
+        qualifierResult = {
+          passed: true, // Give benefit of doubt on API failure
+          cap_tags: [],
+          rel_tags: [],
+          felt_tags: [],
+          specificity: 0,
+          counterfactual: 0,
+          relational: 0,
+          summary: `Qualifier API error — forwarded to HCC review. Error: ${errorMsg}`,
+          model: "error",
+        };
+
+        // Still update the assessment to reflect the error state
+        await supabaseAdmin
+          .from("gate_assessments")
+          .update({
+            tier2_status: "passed",
+            tier2_processed_at: new Date().toISOString(),
+            final_status: "review",
+          })
+          .eq("id", assessment.id);
       }
     }
 
@@ -215,9 +247,12 @@ export async function POST(request: NextRequest) {
     // Response
     const gateStatus = (() => {
       if (!sieveResult.passed) return "rejected_sieve";
-      if (!qualifierResult?.passed) return "rejected_qualifier";
+      if (!qualifierResult) return "error_qualifier";
+      if (!qualifierResult.passed) return "rejected_qualifier";
       return "awaiting_review";
     })();
+
+    console.log("[Gate] Final status:", gateStatus, "qualifier passed:", qualifierResult?.passed);
 
     return NextResponse.json({
       success: true,
@@ -236,6 +271,7 @@ export async function POST(request: NextRequest) {
           felt: qualifierResult.felt_tags.length,
         },
       } : null,
+      ...(qualifierError ? { qualifierError } : {}),
     });
   } catch (err) {
     console.error("Gate submission error:", err);

@@ -21,9 +21,9 @@ export const MODELS = {
   /** Fast, cheap — spam/quality classification */
   SIEVE: 'anthropic/claude-3-haiku',
   /** Balanced — CAP/REL/FELT tag extraction, synthesis */
-  QUALIFIER: 'anthropic/claude-3.5-sonnet',
+  QUALIFIER: 'anthropic/claude-sonnet-4',
   /** Creative — Inquisitor dialogue generation */
-  INQUISITOR: 'anthropic/claude-3.5-sonnet',
+  INQUISITOR: 'anthropic/claude-sonnet-4',
   /** Cheap — PII detection */
   PII_DETECT: 'anthropic/claude-3-haiku',
 } as const;
