@@ -1,6 +1,6 @@
 # The Witness Protocol Foundation Platform
 
-The core infrastructure for gathering, analyzing, and safeguarding human moral and relational testimony in the face of transformative AI.
+The core infrastructure for gathering, analyzing, and safeguarding human moral and relational testimony in the face of transformative AI. 
 
 **Live Site:** [https://thewprotocol.online](https://thewprotocol.online)
 
