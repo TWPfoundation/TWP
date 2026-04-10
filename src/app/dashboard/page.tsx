@@ -51,6 +51,27 @@ export default async function DashboardPage() {
     accepted: { label: "Accepted", color: "text-emerald-400/80" },
   };
 
+  // Fetch Inquisitor sessions
+  const { data: inquisitorSessions } = await supabaseAdmin
+    .from("inquisitor_sessions")
+    .select("id, testimony_id, session_number, status, turn_count, depth_level, created_at, completed_at")
+    .eq("witness_id", profile?.id)
+    .order("created_at", { ascending: false });
+
+  const depthLabels: Record<string, string> = {
+    surface: "Surface",
+    intermediate: "Intermediate",
+    deep: "Deep",
+    philosophical: "Philosophical",
+  };
+
+  const depthColors: Record<string, string> = {
+    surface: "text-blue-400/50",
+    intermediate: "text-amber-400/50",
+    deep: "text-orange-400/50",
+    philosophical: "text-red-400/50",
+  };
+
   return (
     <main className="relative min-h-screen pt-24 pb-16 px-6">
       <div className="max-w-3xl mx-auto space-y-12">
@@ -178,16 +199,114 @@ export default async function DashboardPage() {
           )}
         </section>
 
+        {/* Inquisitor Sessions */}
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl tracking-widest uppercase text-foreground/80">
+              Inquisitor Sessions
+            </h2>
+            <span className="text-[10px] tracking-[0.3em] uppercase text-muted-foreground/40 font-serif">
+              {inquisitorSessions?.length ?? 0} Total
+            </span>
+          </div>
+
+          {(!inquisitorSessions || inquisitorSessions.length === 0) ? (
+            <div className="border border-border/15 p-8 text-center">
+              <p className="text-sm text-muted-foreground/40 font-sans">
+                No Inquisitor sessions yet. Once your testimony passes all three Gate tiers,
+                you may enter{" "}
+                <a href="/instrument" className="text-foreground/60 hover:text-foreground border-b border-border/30 hover:border-foreground/30 transition-colors">
+                  The Instrument
+                </a>.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {inquisitorSessions.map((session: {
+                id: string;
+                session_number: number;
+                status: string;
+                turn_count: number;
+                depth_level: string;
+                created_at: string;
+                completed_at: string | null;
+              }) => (
+                <div
+                  key={session.id}
+                  className="border border-border/20 p-6 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="text-xs font-mono text-foreground/60">
+                        Session #{session.session_number}
+                        <span className={`ml-3 ${
+                          session.status === "active" ? "text-emerald-500/60" :
+                          session.status === "paused" ? "text-amber-500/60" :
+                          "text-muted-foreground/40"
+                        }`}>
+                          {session.status.toUpperCase()}
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/30 font-sans">
+                        {new Date(session.created_at).toLocaleDateString("en-US", {
+                          month: "short", day: "numeric", year: "numeric",
+                        })}
+                        {session.completed_at && ` — completed ${new Date(session.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                      </p>
+                    </div>
+                    <div className="text-right space-y-1">
+                      <p className="text-xs font-mono text-muted-foreground/40">
+                        {session.turn_count}/40 turns
+                      </p>
+                      <p className={`text-[10px] ${depthColors[session.depth_level] || "text-muted-foreground/30"}`}>
+                        {depthLabels[session.depth_level] || "Surface"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="h-1 bg-muted-foreground/5 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        session.status === "active" ? "bg-emerald-800/40" :
+                        session.status === "completed" ? "bg-foreground/20" :
+                        "bg-amber-800/40"
+                      }`}
+                      style={{ width: `${(session.turn_count / 40) * 100}%` }}
+                    />
+                  </div>
+
+                  {session.status === "active" && (
+                    <a
+                      href="/instrument"
+                      className="inline-block text-[10px] text-foreground/50 hover:text-foreground transition-colors font-serif tracking-widest uppercase border-b border-transparent hover:border-foreground/20 pb-px"
+                    >
+                      Resume Session →
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Actions */}
-        <div className="text-center border-t border-border/10 pt-10">
+        <div className="text-center border-t border-border/10 pt-10 flex flex-col items-center gap-3">
           <a
             href="/gate"
             className="inline-flex items-center space-x-2 text-xs text-muted-foreground hover:text-foreground transition-colors duration-300 font-serif tracking-widest uppercase border-b border-transparent hover:border-foreground/20 pb-px"
           >
             <span>Submit New Testimony</span>
           </a>
+          <a
+            href="/instrument"
+            className="inline-flex items-center space-x-2 text-xs text-muted-foreground/50 hover:text-foreground transition-colors duration-300 font-serif tracking-widest uppercase"
+          >
+            <span>Enter The Instrument</span>
+          </a>
         </div>
       </div>
     </main>
   );
 }
+
