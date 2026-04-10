@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { AdminGateQueue } from "@/components/admin/gate-queue";
 
 export const metadata: Metadata = {
@@ -20,8 +21,11 @@ export default async function AdminGatePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user || !ADMIN_EMAILS.includes(user.email || "")) {
-    redirect("/login");
+  const cookieStore = cookies();
+  const hasAdminToken = cookieStore.get("twp_admin_access")?.value === process.env.ADMIN_PASSPHRASE;
+
+  if (!hasAdminToken && (!user || !ADMIN_EMAILS.includes(user.email || ""))) {
+    redirect("/admin/login");
   }
 
   // Fetch assessments awaiting review (Tier 3)
