@@ -298,7 +298,7 @@ Published corpus entries are pinned to IPFS via Pinata or web3.storage.
 |---|---|---|---|
 | **Development** | Local development | `localhost:3000` | Seed data only |
 | **Preview** | PR-based ephemeral previews | `*.vercel.app` | Seed data |
-| **Production** | Live platform | `witnessprotocol.org` | Real data (EU region) |
+| **Production** | Live platform | `thewprotocol.online` | Real data (EU region) |
 
 ### 9.1 CI/CD Pipeline
 
