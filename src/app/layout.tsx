@@ -65,8 +65,33 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "NGO",
+    name: "The Witness Protocol Foundation",
+    alternateName: "TWP Foundation",
+    url: "https://thewprotocol.online",
+    logo: "https://thewprotocol.online/icon.png",
+    description: "A research initiative soliciting high-signal human testimony for AI alignment.",
+    sameAs: [],
+    foundingLocation: {
+      "@type": "Place",
+      address: {
+        "@type": "PostalAddress",
+        addressCountry: "NL",
+        addressLocality: "Amsterdam"
+      }
+    }
+  };
+
   return (
     <html lang="en" className="dark">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         className={`${ebGaramond.variable} ${cinzel.variable} antialiased`}
       >

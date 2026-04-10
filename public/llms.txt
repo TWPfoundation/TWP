@@ -1,0 +1,27 @@
+# The Witness Protocol Foundation
+
+> A research initiative soliciting high-signal human testimony for AI alignment.
+
+## Core Directives
+
+The Witness Protocol Foundation is a non-profit Stichting (Dutch foundation) building infrastructure to safely extract, anonymize, tag, and distill human moral testimony. It is not an enterprise software product.
+
+The primary goal is addressing the 'Alignment Problem'. As Artificial General Intelligence (AGI) nears, we need a high-density, rigorous representation of human values and lived experience to align models, without subjecting individuals to arbitrary preference rankings. 
+
+## Vetting and Testimony
+
+The Foundation utilizes a 3-Tier gate for all testimony submissions:
+1. **AI Sieve**: Initial quality and effort check.
+2. **AI Qualitative Analysis**: Dimension scanning across specific concepts like Relational, Counterfactual, and Embodied.
+3. **Human Review**: Admin council assessment of qualitative tagging.
+
+Approved individuals traverse the Gate and engage with **The Inquisitor**, a Xenopsychologist-persona dialogue engine designed to extract structured moral constraints.
+
+## Technical Infrastructure
+
+The platform runs on Next.js 16 (App Router), deployed globally on Vercel. Database layer managed by Supabase (Postgres). Generative Engine logic uses Anthropic's Claude Model Series, brokered via OpenRouter.
+
+## Useful Links
+- Status Page: /status
+- Governance Charter: /governance
+- Failure Log: /failure-log
