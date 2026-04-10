@@ -65,9 +65,8 @@ export async function POST(request: NextRequest) {
             </p>
             
             <p style="font-size: 15px; line-height: 1.7; color: #808080;">
-              Please note: this is a <em>pre-alpha research initiative</em>. The Protocol's
-              methodology is unproven, its instruments are still being built, and its
-              corpus does not yet exist. You are not joining a product — you are being
+              Please note: this is a <em>Phase 5 Alpha research initiative</em>. The Protocol's
+              core instruments are live and capturing testimony. You are not joining a product — you are being
               asked to contribute to an experiment.
             </p>
             
@@ -86,7 +85,7 @@ export async function POST(request: NextRequest) {
               Stichting The Witness Protocol Foundation · Amsterdam, Netherlands
             </p>
             <p style="text-align: center; font-size: 10px; color: #333333;">
-              Pre-alpha · Not a product · Published failures at thewprotocol.online/failure-log
+              Phase 5 Alpha · Not a product · Published failures at thewprotocol.online/failure-log
             </p>
           </div>
         `,

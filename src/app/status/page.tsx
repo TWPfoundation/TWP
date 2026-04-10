@@ -9,42 +9,36 @@ export const metadata: Metadata = {
 const statusSections = [
   {
     title: "Operational",
-    description: "Live and functional in the current build.",
+    description: "Live and functional in the current production build.",
     items: [
-      { name: "Landing Page", detail: "Public-facing entry point with email summons intake" },
-      { name: "Email Summons", detail: "Supabase-backed registration for assessment distribution" },
-      { name: "The Gate (UI)", detail: "Essay intake form with 250-word minimum and consent flow" },
-      { name: "Reviewer Packet", detail: "Full rubric, exemplar, consent posture, and known limitations" },
-      { name: "Failure Log", detail: "Public, append-only transparency feed — live from database" },
-      { name: "Governance Charter", detail: "Published structure, roles, and policy framework" },
-      { name: "About Page", detail: "Creator profiles and portfolio links" },
-      { name: "Error Monitoring", detail: "Sentry SDK across all three runtimes (browser, server, edge)" },
+      { name: "Global Production Deployment", detail: "Live on Vercel with custom domain and edge-caching" },
+      { name: "The Gate (3-Tier Vetting)", detail: "Tier 1: AI Sieve → Tier 2: AI Qualitative → Tier 3: Human Review via Admin Console" },
+      { name: "Inquisitor Dialogue Engine", detail: "Phase 3 structured testimony extraction, powered by Claude Sonnet 4" },
+      { name: "God Mode Admin Portal", detail: "Standalone passphrase-protected administrative backend" },
+      { name: "Corpus Manager & Dashboard", detail: "Manual tagging interface (CAP/REL/FELT), pipeline statistics, and QA metrics" },
+      { name: "Contributor Dashboard", detail: "Personal tracker for Gate progress and submission history" },
+      { name: "Transaction Email Integration", detail: "Resend-powered magic links and automated acceptance notifications" },
+      { name: "Sentry Error Monitoring", detail: "Live error capture and session tracking across browser, server, and edge runtimes" },
+      { name: "PII De-identification", detail: "Strict regex-based anonymization pipeline securing all database layers" }
     ],
   },
   {
     title: "In Development",
-    description: "Actively being built or designed. Not yet functional.",
+    description: "Actively being built for Phase 5.",
     items: [
-      { name: "AI Gate (3-Tier Vetting)", detail: "Tier 1: AI Sieve → Tier 2: AI Qualitative → Tier 3: Human Review" },
-      { name: "PII De-identification Pipeline", detail: "Detect, strip, and vault personally identifiable information" },
-      { name: "Inquisitor Dialogue Engine", detail: "Claude-powered Xenopsychologist for structured testimony extraction" },
-      { name: "Annotation Framework", detail: "CAP/REL/FELT tagging system with dual-rater agreement tracking" },
-      { name: "Witness Authentication", detail: "Supabase Auth with email OTP for contributor login" },
-      { name: "MHS Packet Email Distribution", detail: "Automated Resend integration for assessment dispatch" },
-      { name: "Contributor Dashboard", detail: "Personal Gate progress, session history, and status tracking" },
+      { name: "Completed Testimony Corpus", detail: "Accumulating real human testimony to train the subsequent layers" },
+      { name: "Constitutional Mirror", detail: "Cross-reference engine for analyzing structural taxonomy anomalies" },
+      { name: "Icarus Synthesis Engine", detail: "Distilled thought generation derived from cross-witness alignments" }
     ],
   },
   {
     title: "Does Not Exist Yet",
-    description: "Planned but not started. Listed for transparency.",
+    description: "Planned for future phases. Listed for transparency.",
     items: [
-      { name: "Completed Testimony Corpus", detail: "No testimony has been fully processed through all Gate tiers" },
-      { name: "Published Research Outputs", detail: "No corpus analysis, no papers, no datasets yet released" },
+      { name: "Published Research Outputs", detail: "No corpus analysis, papers, or datasets yet released" },
       { name: "RFC-3161 Provenance Chain", detail: "Cryptographic timestamping not yet integrated" },
       { name: "IPFS Archival Layer", detail: "Content-addressed storage not yet implemented" },
-      { name: "Synthesis Engine", detail: "Distilled Thought generation (every 15-20 turns) not built" },
-      { name: "Constitutional Mirror", detail: "Cross-reference engine for corpus theme detection not built" },
-      { name: "Board / SAC / HCC Portals", detail: "Governance operational dashboards not implemented" },
+      { name: "Board / SAC / HCC Portals", detail: "Structured external governance dashboards not implemented" },
       { name: "GDPR Compliance Tooling", detail: "DSAR handling, consent audit, and data export/purge not built" },
     ],
   },
@@ -65,7 +59,7 @@ export default function StatusPage() {
             development phase.
           </p>
           <p className="inline-block px-4 py-1 border border-border/40 text-[10px] tracking-[0.3em] uppercase text-muted-foreground font-serif">
-            Phase 1 · Pre-Alpha
+            Live · Phase 5 Setup
           </p>
         </div>
 

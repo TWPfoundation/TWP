@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s — The Witness Protocol Foundation",
   },
   description:
-    "A pre-alpha research initiative soliciting high-signal human testimony for AI alignment. Not a product. Not a startup. A research instrument.",
+    "A Phase 5 Alpha research initiative soliciting high-signal human testimony for AI alignment. Not a product. Not a startup. A research instrument.",
   keywords: [
     "AI alignment",
     "witness protocol",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     siteName: "The Witness Protocol Foundation",
     title: "The Witness Protocol Foundation",
     description:
-      "A pre-alpha research initiative soliciting high-signal human testimony for AI alignment.",
+      "A Phase 5 Alpha research initiative soliciting high-signal human testimony for AI alignment.",
     images: [
       {
         url: "/twp-logo-white.png",
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "The Witness Protocol Foundation",
     description:
-      "A pre-alpha research initiative soliciting high-signal human testimony for AI alignment.",
+      "A Phase 5 Alpha research initiative soliciting high-signal human testimony for AI alignment.",
   },
   robots: {
     index: true,

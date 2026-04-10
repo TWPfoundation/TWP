@@ -8,7 +8,7 @@
 
 **Name:** The Witness Protocol Foundation Platform  
 **Type:** Non-profit research infrastructure (NOT a commercial product)  
-**Stage:** Pre-alpha  
+**Stage:** Phase 5 · Alpha (Live on Vercel)  
 **Legal Entity:** Stichting The Witness Protocol Foundation (Dutch foundation)
 
 ---

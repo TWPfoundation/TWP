@@ -177,8 +177,7 @@ export default function Home() {
           </div>
           <p className="text-sm text-muted-foreground/60 max-w-lg mx-auto font-sans leading-relaxed">
             The Witness Protocol Foundation is a Dutch non-profit (stichting) research
-            initiative. It is pre-alpha — its methodology is unproven, its corpus is
-            empty, and its instruments are still being built. We publish our failures.
+            initiative. It is in Phase 5 Alpha — the core instruments are built and live, and the corpus is actively capturing testimony. We publish our failures.
           </p>
         </motion.div>
       </section>
