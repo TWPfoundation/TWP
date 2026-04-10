@@ -19,7 +19,8 @@ export async function loginAdmin(formData: FormData) {
   // Set the admin access cookie. 
   // Secure: true requires HTTPS but we allow it locally too via Next checks
   // 60*60*24 = 1 day max age
-  cookies().set({
+  const cookieStore = await cookies();
+  cookieStore.set({
     name: "twp_admin_access",
     value: expectedPassphrase,
     httpOnly: true,
@@ -32,5 +33,6 @@ export async function loginAdmin(formData: FormData) {
 }
 
 export async function logoutAdmin() {
-  cookies().delete("twp_admin_access");
+  const cookieStore = await cookies();
+  cookieStore.delete("twp_admin_access");
 }

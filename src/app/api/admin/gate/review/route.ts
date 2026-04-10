@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Verify admin auth
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const hasAdminToken = cookieStore.get("twp_admin_access")?.value === process.env.ADMIN_PASSPHRASE;
 
     if (!hasAdminToken && (!user || !ADMIN_EMAILS.includes(user.email || ""))) {
