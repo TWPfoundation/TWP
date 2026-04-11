@@ -1,27 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { TWP_TRUTH } from '@/lib/truth';
+import { TWP_TRUTH } from '../lib/truth';
 
 describe('Repo-Audit: Relational Truth-Claims Alignment', () => {
   const rootDir = path.resolve(__dirname, '../../');
   
   it('should align package.json version with the truth manifest and CHANGELOG.md', () => {
     const packageJsonPath = path.join(rootDir, 'package.json');
-    const changelogPath = path.join(rootDir, 'docs', 'CHANGELOG.md'); // Adjusting if docs/CHANGELOG is different
+    const changelogPath = path.join(rootDir, 'docs', 'CHANGELOG.md');
     
-    // In our repo, CHANGELOG is at src/app/platform/docs/CHANGELOG.md ? Wait, it is at docs/CHANGELOG.md
-    const actualChangelogPath = fs.existsSync(changelogPath) 
-      ? changelogPath 
-      : path.join(rootDir, 'platform', 'docs', 'CHANGELOG.md'); // Fallback if necessary
-
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
     
-    // Test against the manifest
     expect(packageJson.version).toBe(TWP_TRUTH.currentVersion);
     
-    if (fs.existsSync(actualChangelogPath)) {
-      const changelog = fs.readFileSync(actualChangelogPath, 'utf8');
+    if (fs.existsSync(changelogPath)) {
+      const changelog = fs.readFileSync(changelogPath, 'utf8');
       expect(changelog).toContain(`## [${TWP_TRUTH.currentVersion}]`);
     }
   });
