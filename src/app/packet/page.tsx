@@ -221,7 +221,7 @@ export default function ReviewerPacket() {
             <ol className="space-y-5 text-sm font-sans text-muted-foreground/80 leading-relaxed list-decimal pl-5 marker:text-foreground/30">
               <li>
                 <span className="text-foreground/70 font-serif text-xs tracking-widest uppercase">Rubric Fitness</span>
-                <p className="mt-1">Do the six dimensions and their weights adequately capture what makes a testimony valuable for AI alignment training data? Are any dimensions redundant, or is something critical missing?</p>
+                <p className="mt-1">Do the four dimensions adequately capture what makes a testimony valuable for AI alignment training data? Are any dimensions redundant, or is something critical missing?</p>
               </li>
               <li>
                 <span className="text-foreground/70 font-serif text-xs tracking-widest uppercase">Prompt Quality</span>
@@ -233,7 +233,7 @@ export default function ReviewerPacket() {
               </li>
               <li>
                 <span className="text-foreground/70 font-serif text-xs tracking-widest uppercase">Threshold Calibration</span>
-                <p className="mt-1">Given the exemplar above, does a composite threshold of 3.6 feel appropriately selective? Too permissive? Too strict?</p>
+                <p className="mt-1">Given the exemplar above, does a threshold of 50/100 feel appropriately selective? Too permissive? Too strict?</p>
               </li>
             </ol>
           </div>
