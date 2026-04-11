@@ -8,6 +8,7 @@ The core infrastructure for gathering, analyzing, and safeguarding human moral a
 ## Current Status: Operational Alpha (Live)
 
 The platform is currently **live** and actively used for testimony input and annotation.
+
 <img width="770" height="769" alt="image" src="https://github.com/user-attachments/assets/93fbf95a-3e08-4eee-82ad-76fac3cb79c3" />
 
 ### Completed Infrastructure (Phases 1-4, 6)
