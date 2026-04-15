@@ -17,6 +17,7 @@ export default function LoginClient() {
   const searchParams = useSearchParams();
 
   // Check for verification error from callback
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (searchParams.get("error") === "verification_failed") {
       setError("Verification link expired or was already used. Please request a new one.");

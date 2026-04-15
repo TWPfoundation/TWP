@@ -10,6 +10,7 @@ interface Particle {
   size: number;
   duration: number;
   delay: number;
+  drift: number;
 }
 
 export function AnimatedParticles() {
@@ -28,6 +29,7 @@ export function AnimatedParticles() {
         size: Math.random() * 2 + 1,
         duration: Math.random() * 20 + 20, // 20s to 40s
         delay: Math.random() * 10,
+        drift: (Math.random() - 0.5) * 10,
       });
     }
     
@@ -49,7 +51,7 @@ export function AnimatedParticles() {
           }}
           animate={{
             y: [`0vh`, `-20vh`],
-            x: [`0vw`, `${(Math.random() - 0.5) * 10}vw`],
+            x: [`0vw`, `${p.drift}vw`],
             opacity: [0, 0.8, 0],
           }}
           transition={{
