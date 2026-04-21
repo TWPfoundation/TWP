@@ -24,6 +24,10 @@ interface DashboardStats {
   accepted: number;
   rejected: number;
   pendingReview: number;
+  invitedWitnesses: number;
+  activeWitnesses: number;
+  completedWitnesses: number;
+  revokedWitnesses: number;
   bridgeReady: number;
   bridgeErrors: number;
   avgSpecificity: number;
@@ -104,11 +108,15 @@ export function AdminDashboardClient({ stats }: { stats: DashboardStats }) {
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 gap-3">
         <StatCard icon={Users} label="Total Submissions" value={stats.totalSubmissions} />
-        <StatCard icon={CheckCircle} label="Accepted" value={stats.accepted} accent="text-emerald-500/60" />
+        <StatCard icon={CheckCircle} label="Gate Accepted" value={stats.accepted} accent="text-emerald-500/60" />
         <StatCard icon={XCircle} label="Rejected" value={stats.rejected} accent="text-red-500/60" />
         <StatCard icon={Clock} label="Pending Review" value={stats.pendingReview} accent="text-amber-500/60" />
+        <StatCard icon={Clock} label="Invited" value={stats.invitedWitnesses} accent="text-sky-500/60" />
+        <StatCard icon={MessageSquare} label="Active Runtime" value={stats.activeWitnesses} accent="text-cyan-500/60" />
+        <StatCard icon={CheckCircle} label="Completed" value={stats.completedWitnesses} accent="text-emerald-400/60" />
+        <StatCard icon={XCircle} label="Revoked" value={stats.revokedWitnesses} accent="text-rose-500/60" />
         <StatCard icon={MessageSquare} label="Bridge Ready" value={stats.bridgeReady} accent="text-cyan-500/60" />
       </div>
 
@@ -235,13 +243,21 @@ export function AdminDashboardClient({ stats }: { stats: DashboardStats }) {
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-1.5 h-1.5 rounded-full ${
-                      entry.action.includes("accept")
-                        ? "bg-emerald-500/60"
-                        : entry.action.includes("reject")
-                          ? "bg-red-500/60"
-                          : entry.action.includes("bridge")
-                            ? "bg-cyan-500/60"
-                            : "bg-muted-foreground/20"
+                      entry.action.includes("failed") || entry.action.includes("error")
+                        ? "bg-red-500/60"
+                        : entry.action.includes("invite")
+                          ? "bg-sky-500/60"
+                          : entry.action.includes("completed")
+                            ? "bg-emerald-400/60"
+                            : entry.action.includes("revoked")
+                              ? "bg-rose-500/60"
+                              : entry.action.includes("accept")
+                                ? "bg-emerald-500/60"
+                                : entry.action.includes("reject")
+                                  ? "bg-red-500/60"
+                                  : entry.action.includes("bridge")
+                                    ? "bg-cyan-500/60"
+                                    : "bg-muted-foreground/20"
                     }`}
                   />
                   <span className="text-xs font-mono text-foreground/50">{entry.action}</span>

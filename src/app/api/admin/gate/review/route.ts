@@ -3,7 +3,13 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { requireAdmin } from "@/lib/auth/admin";
 import { SUBMISSION_STATUS, TESTIMONY_STATUS } from "@/lib/lifecycle";
-import { upsertWitnessRuntimeLink } from "@/lib/witness-bridge/link-state";
+import {
+  getWitnessRuntimeLink,
+  logWitnessBridgeAudit,
+  logWitnessLifecycleTransition,
+  upsertWitnessRuntimeLink,
+} from "@/lib/witness-bridge/link-state";
+import { WITNESS_RUNTIME_ACCESS_STATUS } from "@/lib/witness-bridge/lifecycle";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
@@ -85,12 +91,30 @@ export async function POST(request: NextRequest) {
         // @ts-ignore - joined relation typing is incomplete here
         const acceptedWitnessId = assessmentData.witness_submissions?.witness_id as string | undefined;
         if (acceptedWitnessId) {
+          const existingLink = await getWitnessRuntimeLink(
+            supabaseAdmin,
+            acceptedWitnessId
+          );
+          const seededAccessStatus =
+            existingLink?.accessStatus ?? WITNESS_RUNTIME_ACCESS_STATUS.ACCEPTED;
+
           await upsertWitnessRuntimeLink(supabaseAdmin, {
             witnessId: acceptedWitnessId,
-            accessStatus: "accepted",
+            accessStatus: seededAccessStatus,
             bridgeStatus: "pending",
             runtimeConsentStatus: "unknown",
             lastBridgeError: null,
+          });
+
+          await logWitnessLifecycleTransition(supabaseAdmin, {
+            actorId: user.userId,
+            witnessId: acceptedWitnessId,
+            previousAccessStatus: existingLink?.accessStatus,
+            nextAccessStatus: seededAccessStatus,
+            metadata: {
+              via: "gate.tier3.accept",
+              assessmentId,
+            },
           });
         }
 
@@ -103,8 +127,8 @@ export async function POST(request: NextRequest) {
           const witnessEmail = authData?.user?.email;
 
           if (witnessEmail) {
-            await resend.emails
-              .send({
+            try {
+              await resend.emails.send({
                 from: "The Witness Protocol <inquiry@thewprotocol.online>",
                 to: witnessEmail,
                 subject: "The Gate Unlocked: Testimony Accepted",
@@ -118,8 +142,86 @@ export async function POST(request: NextRequest) {
                   <a href="https://thewprotocol.online/instrument" style="background: #333; color: #fff; padding: 12px 24px; text-decoration: none; display: inline-block;">PROCEED TO PHASE 3</a>
                 </div>
               `,
-              })
-              .catch((e) => console.error("Resend error:", e));
+              });
+
+              // @ts-ignore - joined relation typing is incomplete here
+              const acceptedWitnessId = assessmentData.witness_submissions?.witness_id as string | undefined;
+              if (acceptedWitnessId) {
+                const currentLink = await getWitnessRuntimeLink(
+                  supabaseAdmin,
+                  acceptedWitnessId
+                );
+                const shouldAdvanceToInvited =
+                  currentLink?.accessStatus !== WITNESS_RUNTIME_ACCESS_STATUS.ACTIVE &&
+                  currentLink?.accessStatus !== WITNESS_RUNTIME_ACCESS_STATUS.COMPLETED &&
+                  currentLink?.accessStatus !== WITNESS_RUNTIME_ACCESS_STATUS.REVOKED;
+
+                if (shouldAdvanceToInvited) {
+                  await upsertWitnessRuntimeLink(supabaseAdmin, {
+                    witnessId: acceptedWitnessId,
+                    accessStatus: WITNESS_RUNTIME_ACCESS_STATUS.INVITED,
+                  });
+
+                  await logWitnessLifecycleTransition(supabaseAdmin, {
+                    actorId: user.userId,
+                    witnessId: acceptedWitnessId,
+                    previousAccessStatus: currentLink?.accessStatus,
+                    nextAccessStatus: WITNESS_RUNTIME_ACCESS_STATUS.INVITED,
+                    metadata: {
+                      via: "gate.invite.email",
+                      assessmentId,
+                    },
+                  });
+                }
+              }
+            } catch (inviteError) {
+              console.error("Resend error:", inviteError);
+
+              // @ts-ignore - joined relation typing is incomplete here
+              const acceptedWitnessId = assessmentData.witness_submissions?.witness_id as string | undefined;
+              if (acceptedWitnessId) {
+                await logWitnessBridgeAudit(supabaseAdmin, {
+                  action: "witness.invite.failed",
+                  actorId: user.userId,
+                  witnessId: acceptedWitnessId,
+                  metadata: {
+                    assessmentId,
+                    error:
+                      inviteError instanceof Error
+                        ? inviteError.message
+                        : "Invite send failed.",
+                  },
+                });
+              }
+            }
+          } else {
+            // @ts-ignore - joined relation typing is incomplete here
+            const acceptedWitnessId = assessmentData.witness_submissions?.witness_id as string | undefined;
+            if (acceptedWitnessId) {
+              await logWitnessBridgeAudit(supabaseAdmin, {
+                action: "witness.invite.failed",
+                actorId: user.userId,
+                witnessId: acceptedWitnessId,
+                metadata: {
+                  assessmentId,
+                  error: "Accepted witness has no notification email.",
+                },
+              });
+            }
+          }
+        } else {
+          // @ts-ignore - joined relation typing is incomplete here
+          const acceptedWitnessId = assessmentData.witness_submissions?.witness_id as string | undefined;
+          if (acceptedWitnessId) {
+            await logWitnessBridgeAudit(supabaseAdmin, {
+              action: "witness.invite.failed",
+              actorId: user.userId,
+              witnessId: acceptedWitnessId,
+              metadata: {
+                assessmentId,
+                error: "Accepted witness has no Supabase auth mapping.",
+              },
+            });
           }
         }
       }

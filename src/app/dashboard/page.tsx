@@ -6,6 +6,7 @@ import {
   bootstrapWitnessRuntime,
   WitnessBridgeClient,
 } from "@/lib/witness-bridge/client";
+import { deriveWitnessOperatorLifecycleStatus } from "@/lib/witness-bridge/lifecycle";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -73,6 +74,14 @@ export default async function DashboardPage() {
           : "Governed runtime status unavailable.";
     }
   }
+
+  const lifecycleStatus = runtimeLink
+    ? deriveWitnessOperatorLifecycleStatus({
+        accessStatus: runtimeLink.access_status,
+        bridgeStatus: runtimeSnapshot?.bridgeStatus ?? runtimeLink.bridge_status,
+        latestTestimonyState: runtimeSnapshot?.latestTestimony?.state,
+      })
+    : null;
 
   return (
     <main className="relative min-h-screen pt-24 pb-16 px-6">
@@ -254,7 +263,15 @@ export default async function DashboardPage() {
           ) : (
             <div className="space-y-4">
               <div className="border border-border/20 p-6 space-y-4">
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div>
+                    <p className="text-[10px] tracking-[0.3em] uppercase text-muted-foreground/40 font-serif">
+                      Lifecycle
+                    </p>
+                    <p className="mt-1 font-mono text-sm text-foreground/70">
+                      {lifecycleStatus}
+                    </p>
+                  </div>
                   <div>
                     <p className="text-[10px] tracking-[0.3em] uppercase text-muted-foreground/40 font-serif">
                       Bridge Status
@@ -274,7 +291,7 @@ export default async function DashboardPage() {
                   </div>
                   <div>
                     <p className="text-[10px] tracking-[0.3em] uppercase text-muted-foreground/40 font-serif">
-                      Access
+                      Access Mirror
                     </p>
                     <p className="mt-1 font-mono text-sm text-foreground/70">
                       {runtimeLink.access_status}

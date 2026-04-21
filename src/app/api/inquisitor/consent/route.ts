@@ -8,9 +8,17 @@ import {
   grantWitnessEntryConsent,
 } from '@/lib/witness-bridge/client';
 import {
+  getWitnessRuntimeLink,
   logWitnessBridgeAudit,
+  logWitnessLifecycleTransition,
   upsertWitnessRuntimeLink,
 } from '@/lib/witness-bridge/link-state';
+import {
+  classifyWitnessBridgeFailure,
+  deriveWitnessAccessStatus,
+  deriveWitnessOperatorLifecycleStatus,
+  isWitnessRuntimeAccessBlocked,
+} from '@/lib/witness-bridge/lifecycle';
 
 const supabaseAdmin = createAdminClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,6 +50,9 @@ function toBridgeErrorResponse(error: unknown) {
 }
 
 export async function POST() {
+  let witnessId: string | undefined;
+  let currentLink: Awaited<ReturnType<typeof getWitnessRuntimeLink>> = null;
+
   try {
     const supabase = await createClient();
     const {
@@ -69,6 +80,16 @@ export async function POST() {
       );
     }
 
+    witnessId = profile.id;
+    currentLink = await getWitnessRuntimeLink(supabaseAdmin, profile.id);
+
+    if (isWitnessRuntimeAccessBlocked(currentLink?.accessStatus)) {
+      return NextResponse.json(
+        { error: 'Witness runtime access has been revoked.' },
+        { status: 403 }
+      );
+    }
+
     const { data: acceptedTestimony } = await supabaseAdmin
       .from('testimony_records')
       .select('id')
@@ -92,13 +113,29 @@ export async function POST() {
     const runtime = await grantWitnessEntryConsent(bridge, {
       witnessId: profile.id,
     });
+    const nextAccessStatus = deriveWitnessAccessStatus({
+      currentAccessStatus: currentLink?.accessStatus,
+      hasSession: Boolean(runtime.session),
+      latestTestimonyState: runtime.latestTestimony?.state,
+    });
 
     await upsertWitnessRuntimeLink(supabaseAdmin, {
       witnessId: profile.id,
-      accessStatus: runtime.session ? 'active' : 'accepted',
+      accessStatus: nextAccessStatus,
       bridgeStatus: runtime.bridgeStatus,
       runtimeConsentStatus: runtime.consentStatus,
       lastBridgeError: null,
+    });
+
+    await logWitnessLifecycleTransition(supabaseAdmin, {
+      actorId: profile.id,
+      witnessId: profile.id,
+      previousAccessStatus: currentLink?.accessStatus,
+      nextAccessStatus,
+      metadata: {
+        via: 'witness.bridge.consent_granted',
+        latestTestimonyState: runtime.latestTestimony?.state ?? null,
+      },
     });
 
     await logWitnessBridgeAudit(supabaseAdmin, {
@@ -108,11 +145,21 @@ export async function POST() {
       metadata: {
         bridgeStatus: runtime.bridgeStatus,
         consentStatus: runtime.consentStatus,
+        lifecycleStatus: deriveWitnessOperatorLifecycleStatus({
+          accessStatus: nextAccessStatus,
+          bridgeStatus: runtime.bridgeStatus,
+          latestTestimonyState: runtime.latestTestimony?.state,
+        }),
         missingScopes: runtime.missingScopes,
       },
     });
 
     return NextResponse.json({
+      lifecycleStatus: deriveWitnessOperatorLifecycleStatus({
+        accessStatus: nextAccessStatus,
+        bridgeStatus: runtime.bridgeStatus,
+        latestTestimonyState: runtime.latestTestimony?.state,
+      }),
       bridgeStatus: runtime.bridgeStatus,
       consentStatus: runtime.consentStatus,
       missingScopes: runtime.missingScopes,
@@ -128,6 +175,37 @@ export async function POST() {
     });
   } catch (error) {
     console.error('Witness bridge consent error:', error);
+
+    if (witnessId) {
+      const failure = classifyWitnessBridgeFailure(error);
+
+      await upsertWitnessRuntimeLink(supabaseAdmin, {
+        witnessId,
+        accessStatus: currentLink?.accessStatus ?? 'accepted',
+        bridgeStatus: 'error',
+        runtimeConsentStatus:
+          failure.kind === 'consent_required'
+            ? 'missing_required'
+            : currentLink?.runtimeConsentStatus ?? 'unknown',
+        lastBridgeError:
+          error instanceof Error ? error.message : 'Witness bridge request failed.',
+      });
+
+      await logWitnessBridgeAudit(supabaseAdmin, {
+        action: 'witness.bridge.error',
+        actorId: witnessId,
+        witnessId,
+        metadata: {
+          operation: 'consent',
+          category: failure.kind,
+          retryable: failure.retryable,
+          status: failure.status ?? null,
+          code: failure.code ?? null,
+          accessStatus: currentLink?.accessStatus ?? 'accepted',
+        },
+      });
+    }
+
     return toBridgeErrorResponse(error);
   }
 }

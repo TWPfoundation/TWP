@@ -7,9 +7,17 @@ import {
   WitnessBridgeHttpError,
 } from '@/lib/witness-bridge/client';
 import {
+  getWitnessRuntimeLink,
   logWitnessBridgeAudit,
+  logWitnessLifecycleTransition,
   upsertWitnessRuntimeLink,
 } from '@/lib/witness-bridge/link-state';
+import {
+  classifyWitnessBridgeFailure,
+  deriveWitnessAccessStatus,
+  isWitnessRuntimeAccessBlocked,
+  WITNESS_RUNTIME_ACCESS_STATUS,
+} from '@/lib/witness-bridge/lifecycle';
 
 const supabaseAdmin = createAdminClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -43,6 +51,7 @@ function toBridgeErrorResponse(error: unknown, witnessId?: string) {
 
 export async function POST(request: NextRequest) {
   let witnessId: string | undefined;
+  let currentLink: Awaited<ReturnType<typeof getWitnessRuntimeLink>> = null;
 
   try {
     const supabase = await createClient();
@@ -72,6 +81,21 @@ export async function POST(request: NextRequest) {
     }
 
     witnessId = profile.id;
+    currentLink = await getWitnessRuntimeLink(supabaseAdmin, profile.id);
+
+    if (isWitnessRuntimeAccessBlocked(currentLink?.accessStatus)) {
+      return NextResponse.json(
+        { error: 'Witness runtime access has been revoked.' },
+        { status: 403 }
+      );
+    }
+
+    if (currentLink?.accessStatus === WITNESS_RUNTIME_ACCESS_STATUS.COMPLETED) {
+      return NextResponse.json(
+        { error: 'Witness runtime is already completed for this accepted witness.' },
+        { status: 409 }
+      );
+    }
 
     const { sessionId, testimonyId, message } = await request.json();
 
@@ -131,13 +155,29 @@ export async function POST(request: NextRequest) {
           : undefined,
       userMessage: message.trim(),
     });
+    const nextAccessStatus = deriveWitnessAccessStatus({
+      currentAccessStatus: currentLink?.accessStatus,
+      hasSession: true,
+      latestTestimonyState: null,
+    });
 
     await upsertWitnessRuntimeLink(supabaseAdmin, {
       witnessId: profile.id,
-      accessStatus: 'active',
+      accessStatus: nextAccessStatus,
       bridgeStatus: 'active',
       runtimeConsentStatus: 'ready',
       lastBridgeError: null,
+    });
+
+    await logWitnessLifecycleTransition(supabaseAdmin, {
+      actorId: profile.id,
+      witnessId: profile.id,
+      previousAccessStatus: currentLink?.accessStatus,
+      nextAccessStatus,
+      metadata: {
+        via: 'witness.bridge.turn',
+        testimonyId: result.testimonyId ?? null,
+      },
     });
 
     await logWitnessBridgeAudit(supabaseAdmin, {
@@ -161,23 +201,32 @@ export async function POST(request: NextRequest) {
     console.error('Witness bridge turn error:', error);
 
     if (witnessId) {
-      const details =
-        error instanceof WitnessBridgeHttpError &&
-        error.details &&
-        typeof error.details === 'object'
-          ? (error.details as Record<string, unknown>)
-          : {};
-      const missingScopes = Array.isArray(details.missingScopes)
-        ? details.missingScopes
-        : [];
+      const failure = classifyWitnessBridgeFailure(error);
 
       await upsertWitnessRuntimeLink(supabaseAdmin, {
         witnessId,
-        accessStatus: 'accepted',
+        accessStatus: currentLink?.accessStatus ?? 'accepted',
         bridgeStatus: 'error',
-        runtimeConsentStatus: missingScopes.length > 0 ? 'missing_required' : 'unknown',
+        runtimeConsentStatus:
+          failure.kind === 'consent_required'
+            ? 'missing_required'
+            : currentLink?.runtimeConsentStatus ?? 'unknown',
         lastBridgeError:
           error instanceof Error ? error.message : 'Witness bridge request failed.',
+      });
+
+      await logWitnessBridgeAudit(supabaseAdmin, {
+        action: 'witness.bridge.error',
+        actorId: witnessId,
+        witnessId,
+        metadata: {
+          operation: 'turn',
+          category: failure.kind,
+          retryable: failure.retryable,
+          status: failure.status ?? null,
+          code: failure.code ?? null,
+          accessStatus: currentLink?.accessStatus ?? 'accepted',
+        },
       });
     }
 
