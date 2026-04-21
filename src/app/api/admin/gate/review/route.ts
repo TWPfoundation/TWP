@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { requireAdmin } from "@/lib/auth/admin";
-import { SUBMISSION_STATUS, ASSESSMENT_STATUS, TESTIMONY_STATUS } from "@/lib/lifecycle";
+import { SUBMISSION_STATUS, TESTIMONY_STATUS } from "@/lib/lifecycle";
+import { upsertWitnessRuntimeLink } from "@/lib/witness-bridge/link-state";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
@@ -77,6 +78,21 @@ export async function POST(request: NextRequest) {
           .from("testimony_records")
           .update({ status: TESTIMONY_STATUS.ANNOTATING })
           .eq("gate_assessment_id", assessmentId);
+
+        // Seed minimal TWP-side bridge linkage for the accepted witness.
+        // Auth mapping remains owned by witness_profiles; this row stores only
+        // access and bridge sync state for the governed runtime handoff.
+        // @ts-ignore - joined relation typing is incomplete here
+        const acceptedWitnessId = assessmentData.witness_submissions?.witness_id as string | undefined;
+        if (acceptedWitnessId) {
+          await upsertWitnessRuntimeLink(supabaseAdmin, {
+            witnessId: acceptedWitnessId,
+            accessStatus: "accepted",
+            bridgeStatus: "pending",
+            runtimeConsentStatus: "unknown",
+            lastBridgeError: null,
+          });
+        }
 
         // Fetch witness email and send notification
         // @ts-ignore - Supabase JS typings for joined inner objects can be finicky

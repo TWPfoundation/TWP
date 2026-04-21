@@ -205,6 +205,19 @@ CREATE TABLE public.consent_records (
   last_updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
+-- 14. witness_runtime_links: Minimal accepted-witness bridge state
+CREATE TABLE public.witness_runtime_links (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  witness_id UUID UNIQUE NOT NULL REFERENCES public.witness_profiles(id),
+  access_status TEXT DEFAULT 'accepted' NOT NULL,
+  bridge_status TEXT DEFAULT 'pending' NOT NULL,
+  runtime_consent_status TEXT DEFAULT 'unknown' NOT NULL,
+  last_bridge_error TEXT,
+  last_bridge_synced_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- ────────────────────────────────────────────────────────
 -- SECURITY (RLS POLICIES)
 -- ────────────────────────────────────────────────────────
@@ -223,6 +236,7 @@ ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expert_targets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.consent_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.witness_runtime_links ENABLE ROW LEVEL SECURITY;
 
 -- Anonymous Intake Policies
 CREATE POLICY "summons_insert_anon" ON public.summons FOR INSERT TO anon WITH CHECK (true);
@@ -231,6 +245,7 @@ CREATE POLICY "summons_insert_anon" ON public.summons FOR INSERT TO anon WITH CH
 CREATE POLICY "witness_profile_self" ON public.witness_profiles FOR SELECT TO authenticated USING (auth.uid() = supabase_user_id);
 CREATE POLICY "witness_submission_self_insert" ON public.witness_submissions FOR INSERT TO authenticated WITH CHECK (EXISTS (SELECT 1 FROM public.witness_profiles WHERE id = witness_id AND supabase_user_id = auth.uid()));
 CREATE POLICY "consent_records_self" ON public.consent_records FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.witness_profiles WHERE id = witness_id AND supabase_user_id = auth.uid()));
+CREATE POLICY "witness_runtime_links_self" ON public.witness_runtime_links FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.witness_profiles WHERE id = witness_id AND supabase_user_id = auth.uid()));
 
 -- Inquisitor Policies
 CREATE POLICY "inquisitor_sessions_self" ON public.inquisitor_sessions FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.witness_profiles WHERE id = witness_id AND supabase_user_id = auth.uid()));

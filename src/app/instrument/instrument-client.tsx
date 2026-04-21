@@ -5,18 +5,25 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Terminal,
   Send,
-  Pause,
-  Square,
   Zap,
   ChevronUp,
   Loader2,
+  ShieldCheck,
 } from "lucide-react";
 
 interface Turn {
   id: string;
-  role: "witness" | "inquisitor" | "system" | "synthesis";
+  role: "witness" | "inquisitor" | "system";
   content: string;
-  isStreaming?: boolean;
+}
+
+interface RuntimeSession {
+  id: string;
+  turns: Array<{
+    id: string;
+    userMessage: string;
+    assistantMessage: string;
+  }>;
 }
 
 interface Props {
@@ -24,95 +31,160 @@ interface Props {
   testimonyPreview: string;
 }
 
+type SessionStatus =
+  | "loading"
+  | "consent_required"
+  | "ready"
+  | "active"
+  | "error";
+
+function sessionToMessages(session: RuntimeSession | null): Turn[] {
+  if (!session) {
+    return [];
+  }
+
+  return session.turns.flatMap((turn) => [
+    {
+      id: `${turn.id}-w`,
+      role: "witness" as const,
+      content: turn.userMessage,
+    },
+    {
+      id: `${turn.id}-i`,
+      role: "inquisitor" as const,
+      content: turn.assistantMessage,
+    },
+  ]);
+}
+
 export function InstrumentClient({ testimonyId, testimonyPreview }: Props) {
   const [messages, setMessages] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isGrantingConsent, setIsGrantingConsent] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessionStatus, setSessionStatus] = useState<string>("loading");
-  const [turnCount, setTurnCount] = useState(0);
-  const [depthLevel, setDepthLevel] = useState("surface");
-  const [canStartNew, setCanStartNew] = useState(true);
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>("loading");
+  const [bridgeStatus, setBridgeStatus] = useState("pending");
+  const [consentStatus, setConsentStatus] = useState("unknown");
+  const [roundCount, setRoundCount] = useState(0);
   const [showTestimony, setShowTestimony] = useState(false);
+  const [missingScopes, setMissingScopes] = useState<string[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-scroll
   useEffect(() => {
     endOfMessagesRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Load existing session on mount
-  useEffect(() => {
-    loadSession();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const loadSession = useCallback(async () => {
+    setSessionStatus("loading");
+    setErrorMessage(null);
+
     try {
       const res = await fetch(`/api/inquisitor/session?testimonyId=${testimonyId}`);
       const data = await res.json();
 
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load governed witness runtime.");
+      }
+
+      setBridgeStatus(data.bridgeStatus || "pending");
+      setConsentStatus(data.consentStatus || "unknown");
+      setMissingScopes(Array.isArray(data.missingScopes) ? data.missingScopes : []);
+
       if (data.session) {
         setSessionId(data.session.id);
-        setSessionStatus(data.session.status);
-        setTurnCount(data.session.turn_count);
-        setDepthLevel(data.session.depth_level);
+        setRoundCount(data.roundCount || data.session.turns.length || 0);
+        setMessages(sessionToMessages(data.session));
+        setSessionStatus("active");
+        return;
+      }
 
-        // Reconstruct messages from turns
-        const loadedMessages: Turn[] = data.turns
-          .filter((t: { role: string }) => t.role !== "system")
-          .map((t: { id: string; role: string; content: string }) => ({
-            id: t.id,
-            role: t.role as Turn["role"],
-            content: t.content,
-          }));
+      setSessionId(null);
+      setRoundCount(0);
 
-        setMessages(loadedMessages);
-
-        if (data.session.status === "completed" || data.session.status === "terminated") {
-          setCanStartNew(data.sessionCount < 2);
-        }
-      } else {
-        setSessionStatus("new");
-        setCanStartNew(data.canStartNew);
-
-        // Opening system message
+      if (Array.isArray(data.missingScopes) && data.missingScopes.length > 0) {
         setMessages([
           {
-            id: "init",
+            id: "consent-required",
             role: "system",
-            content: "Secure channel established. The Inquisitor is observing.",
+            content:
+              "Governed Witness runtime consent is required before the session can begin.",
           },
         ]);
+        setSessionStatus("consent_required");
+        return;
       }
-    } catch (err) {
-      console.error("Session load error:", err);
+
+      setMessages([
+        {
+          id: "runtime-ready",
+          role: "system",
+          content:
+            "Governed Witness runtime is ready. Your next message will be sent through G_5.2.",
+        },
+      ]);
+      setSessionStatus("ready");
+    } catch (error) {
+      console.error("Witness runtime bootstrap error:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Witness runtime bootstrap failed.";
+      setMessages([
+        {
+          id: "runtime-error",
+          role: "system",
+          content: message,
+        },
+      ]);
+      setErrorMessage(message);
       setSessionStatus("error");
     }
   }, [testimonyId]);
 
+  useEffect(() => {
+    loadSession();
+  }, [loadSession]);
+
+  const handleGrantConsent = async () => {
+    setIsGrantingConsent(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await fetch("/api/inquisitor/consent", { method: "POST" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to grant runtime consent.");
+      }
+
+      await loadSession();
+    } catch (error) {
+      console.error("Witness runtime consent error:", error);
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to grant runtime consent."
+      );
+      setSessionStatus("error");
+    } finally {
+      setIsGrantingConsent(false);
+    }
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || sessionStatus === "consent_required") {
+      return;
+    }
 
     const witnessMessage = input.trim();
     setInput("");
     setIsLoading(true);
-
-    // Add witness message
-    const witnessId = `w-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: witnessId, role: "witness", content: witnessMessage },
-    ]);
-
-    // Add placeholder for streaming response
-    const inquisitorId = `i-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: inquisitorId, role: "inquisitor", content: "", isStreaming: true },
-    ]);
+    setErrorMessage(null);
 
     try {
       const res = await fetch("/api/inquisitor", {
@@ -125,119 +197,50 @@ export function InstrumentClient({ testimonyId, testimonyPreview }: Props) {
         }),
       });
 
-      // Check for non-streaming error responses
+      const data = await res.json();
       if (!res.ok) {
-        const errorData = await res.json();
-
-        if (errorData.sessionComplete) {
-          setSessionStatus("completed");
+        if (Array.isArray(data.missingScopes) && data.missingScopes.length > 0) {
+          setMissingScopes(data.missingScopes);
+          setConsentStatus("missing_required");
+          setSessionStatus("consent_required");
         }
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === inquisitorId
-              ? { ...m, role: "system", content: errorData.error, isStreaming: false }
-              : m
-          )
-        );
-        setIsLoading(false);
-        return;
+        throw new Error(data.error || "Witness runtime turn failed.");
       }
 
-      // Capture session ID from response headers
-      const newSessionId = res.headers.get("X-Session-Id");
-      const newTurnNumber = res.headers.get("X-Turn-Number");
-      const newDepth = res.headers.get("X-Depth-Level");
-
-      if (newSessionId) setSessionId(newSessionId);
-      if (newTurnNumber) setTurnCount(parseInt(newTurnNumber, 10));
-      if (newDepth) setDepthLevel(newDepth);
+      setSessionId(data.session.id);
+      setRoundCount(data.roundCount || data.session.turns.length || 0);
+      setMessages(sessionToMessages(data.session));
+      setBridgeStatus("active");
+      setConsentStatus("ready");
+      setMissingScopes([]);
       setSessionStatus("active");
-
-      // Stream the response
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (reader) {
-        let fullText = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          fullText += chunk;
-
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === inquisitorId
-                ? { ...m, content: fullText, isStreaming: true }
-                : m
-            )
-          );
-        }
-
-        // Mark streaming done
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === inquisitorId ? { ...m, isStreaming: false } : m
-          )
-        );
-      }
-    } catch (err) {
-      console.error("Send error:", err);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === inquisitorId
-            ? {
-                ...m,
-                role: "system",
-                content: "Connection interrupted. Your message was recorded. Please try again.",
-                isStreaming: false,
-              }
-            : m
-        )
+    } catch (error) {
+      console.error("Witness runtime turn error:", error);
+      setErrorMessage(
+        error instanceof Error ? error.message : "Witness runtime turn failed."
       );
+    } finally {
+      setIsLoading(false);
+      textareaRef.current?.focus();
     }
-
-    setIsLoading(false);
-    textareaRef.current?.focus();
   };
 
-  const handlePause = async () => {
-    // TODO: Implement session pause API
-    setSessionStatus("paused");
-  };
-
-  const handleEnd = async () => {
-    if (!confirm("End this session? You have one retry session available.")) return;
-    setSessionStatus("completed");
-  };
-
-  // Depth indicator colors
-  const depthColors: Record<string, string> = {
-    surface: "bg-blue-500/50",
-    intermediate: "bg-amber-500/50",
-    deep: "bg-orange-500/50",
-    philosophical: "bg-red-500/50",
-  };
-
-  const depthLabels: Record<string, string> = {
-    surface: "Surface",
-    intermediate: "Intermediate",
-    deep: "Deep",
-    philosophical: "Philosophical",
-  };
-
-  const maxTurns = 40;
+  const statusLabel =
+    sessionStatus === "loading"
+      ? "Loading"
+      : sessionStatus === "consent_required"
+        ? "Consent Required"
+        : sessionStatus === "ready"
+          ? "Ready"
+          : sessionStatus === "active"
+            ? "Active"
+            : "Error";
 
   return (
     <main className="min-h-screen bg-black text-foreground flex flex-col relative overflow-hidden font-mono group">
-      {/* Background Ambience */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-neutral-900/40 via-black to-black pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-1000" />
 
-      {/* Header */}
       <header className="relative z-10 flex items-center justify-between border-b border-white/10 p-4 md:px-8">
         <div className="flex items-center space-x-3">
           <Terminal className="w-5 h-5 opacity-60" />
@@ -247,39 +250,36 @@ export function InstrumentClient({ testimonyId, testimonyPreview }: Props) {
         </div>
 
         <div className="flex items-center space-x-4">
-          {/* Depth Meter */}
           <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${depthColors[depthLevel] || depthColors.surface} animate-pulse`} />
+            <ShieldCheck className="w-4 h-4 text-cyan-500/50" />
             <span className="text-[10px] tracking-widest uppercase text-muted-foreground/40">
-              {depthLabels[depthLevel] || "Surface"}
+              {bridgeStatus}
             </span>
           </div>
 
-          {/* Turn Counter */}
           <div className="text-[10px] text-muted-foreground/30 font-mono">
-            {turnCount}/{maxTurns}
+            {roundCount} rounds
           </div>
 
-          {/* Session Status */}
           <div className="flex items-center space-x-1">
             <div
               className={`w-2 h-2 rounded-full animate-pulse ${
-                sessionStatus === "active" ? "bg-emerald-500/50" :
-                sessionStatus === "paused" ? "bg-amber-500/50" :
-                sessionStatus === "completed" ? "bg-muted-foreground/30" :
-                "bg-blue-500/50"
+                sessionStatus === "active"
+                  ? "bg-emerald-500/50"
+                  : sessionStatus === "consent_required"
+                    ? "bg-amber-500/50"
+                    : sessionStatus === "error"
+                      ? "bg-red-500/50"
+                      : "bg-blue-500/50"
               }`}
             />
             <span className="text-[10px] tracking-widest uppercase text-muted-foreground/40">
-              {sessionStatus === "loading" ? "Loading" :
-               sessionStatus === "new" ? "Ready" :
-               sessionStatus.toUpperCase()}
+              {statusLabel}
             </span>
           </div>
         </div>
       </header>
 
-      {/* Testimony Context Drawer */}
       <div className="relative z-10 max-w-3xl mx-auto w-full px-4">
         <button
           onClick={() => setShowTestimony(!showTestimony)}
@@ -306,8 +306,7 @@ export function InstrumentClient({ testimonyId, testimonyPreview }: Props) {
         </AnimatePresence>
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 relative z-10 overflow-y-auto custom-scrollbar px-4 md:px-8 space-y-8 max-w-3xl mx-auto w-full pb-36">
+      <div className="flex-1 relative z-10 overflow-y-auto custom-scrollbar px-4 md:px-8 space-y-8 max-w-3xl mx-auto w-full pb-44">
         <AnimatePresence mode="popLayout">
           {messages.map((msg) => (
             <motion.div
@@ -325,28 +324,13 @@ export function InstrumentClient({ testimonyId, testimonyPreview }: Props) {
                 </div>
               )}
 
-              {msg.role === "synthesis" && (
-                <div className="w-full my-6 border border-amber-500/10 p-5 space-y-2">
-                  <div className="flex items-center space-x-2 text-[10px] tracking-widest uppercase text-amber-500/40 font-serif">
-                    <Zap className="w-3 h-3" />
-                    <span>Distilled Thought</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground/50 font-serif italic leading-relaxed">
-                    {msg.content}
-                  </p>
-                </div>
-              )}
-
               {msg.role === "inquisitor" && (
                 <div className="max-w-[85%] text-left">
                   <span className="text-[10px] tracking-widest uppercase opacity-40 mb-2 block font-serif">
-                    The Inquisitor
+                    G_5.2 Witness Runtime
                   </span>
                   <p className="font-serif text-lg leading-relaxed text-foreground/90 text-glow">
                     {msg.content}
-                    {msg.isStreaming && (
-                      <span className="inline-block w-[2px] h-[1.1em] bg-foreground/60 ml-1 animate-pulse align-text-bottom" />
-                    )}
                   </p>
                 </div>
               )}
@@ -362,12 +346,11 @@ export function InstrumentClient({ testimonyId, testimonyPreview }: Props) {
           ))}
         </AnimatePresence>
 
-        {/* Loading indicator */}
-        {isLoading && messages[messages.length - 1]?.content === "" && (
+        {isLoading && (
           <div className="flex items-center space-x-2 text-muted-foreground/30">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="text-xs font-serif tracking-widest uppercase">
-              The Inquisitor is formulating...
+              G_5.2 is responding...
             </span>
           </div>
         )}
@@ -375,39 +358,55 @@ export function InstrumentClient({ testimonyId, testimonyPreview }: Props) {
         <div ref={endOfMessagesRef} />
       </div>
 
-      {/* Input Area */}
       <div className="fixed bottom-0 left-0 w-full p-4 md:p-8 bg-gradient-to-t from-black via-black/90 to-transparent z-20">
         <div className="max-w-3xl mx-auto">
-          {/* Safety Controls */}
-          <div className="flex justify-end space-x-3 mb-3">
-            {sessionStatus === "active" && (
-              <>
-                <button
-                  onClick={handlePause}
-                  className="flex items-center space-x-1 text-[10px] text-muted-foreground/30 hover:text-amber-500/60 transition-colors uppercase tracking-widest font-serif"
-                >
-                  <Pause className="w-3 h-3" />
-                  <span>Pause</span>
-                </button>
-                <button
-                  onClick={handleEnd}
-                  className="flex items-center space-x-1 text-[10px] text-muted-foreground/30 hover:text-red-500/60 transition-colors uppercase tracking-widest font-serif"
-                >
-                  <Square className="w-3 h-3" />
-                  <span>End Session</span>
-                </button>
-              </>
-            )}
-          </div>
+          {errorMessage && (
+            <div className="mb-4 border border-red-500/20 bg-red-500/5 px-4 py-3 text-xs text-red-200/80">
+              {errorMessage}
+            </div>
+          )}
 
-          {(sessionStatus === "active" || sessionStatus === "new") ? (
+          {sessionStatus === "consent_required" ? (
+            <div className="border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+              <div className="flex items-center space-x-2 text-[10px] tracking-widest uppercase text-amber-500/60 font-serif">
+                <Zap className="w-3 h-3" />
+                <span>Governed Runtime Consent</span>
+              </div>
+              <p className="text-sm text-muted-foreground/60 font-sans leading-relaxed">
+                To continue into the governed Witness runtime, you must grant entry
+                consent for conversational processing and retention within G_5.2.
+              </p>
+              {missingScopes.length > 0 && (
+                <p className="text-[11px] text-muted-foreground/40 font-mono">
+                  Missing scopes: {missingScopes.join(", ")}
+                </p>
+              )}
+              <button
+                onClick={handleGrantConsent}
+                disabled={isGrantingConsent}
+                className="inline-flex items-center gap-2 border border-white/15 px-4 py-2 text-xs uppercase tracking-widest text-foreground/70 hover:text-foreground hover:border-white/30 transition-colors disabled:opacity-40"
+              >
+                {isGrantingConsent ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Granting…</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>Grant Runtime Consent</span>
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
             <form onSubmit={handleSend} className="relative flex items-end group/input">
               <textarea
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Speak your truth..."
-                disabled={isLoading}
+                disabled={isLoading || sessionStatus === "loading" || sessionStatus === "error"}
                 className="w-full bg-transparent border-b border-white/20 focus:border-white/60 p-4 pr-12 text-sm text-foreground placeholder:text-white/20 resize-none min-h-[60px] max-h-[200px] font-sans focus:outline-none transition-colors disabled:opacity-40"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -418,41 +417,17 @@ export function InstrumentClient({ testimonyId, testimonyPreview }: Props) {
               />
               <button
                 type="submit"
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || isLoading || sessionStatus === "loading" || sessionStatus === "error"}
                 className="absolute right-2 bottom-4 p-2 text-white/40 hover:text-white transition-colors disabled:opacity-30"
               >
                 <Send className="w-4 h-4" />
               </button>
             </form>
-          ) : (
-            <div className="text-center py-4">
-              <p className="text-sm text-muted-foreground/40 font-sans">
-                {sessionStatus === "completed" && "Session complete. Thank you for your testimony."}
-                {sessionStatus === "paused" && "Session paused. Resume when ready."}
-                {sessionStatus === "terminated" && "Session terminated."}
-              </p>
-              {sessionStatus === "completed" && canStartNew && (
-                <button
-                  onClick={() => { setSessionStatus("new"); setMessages([]); setSessionId(null); }}
-                  className="mt-3 text-xs text-muted-foreground/40 hover:text-foreground transition-colors font-serif tracking-widest uppercase border-b border-transparent hover:border-foreground/20 pb-px"
-                >
-                  Begin Retry Session
-                </button>
-              )}
-              {sessionStatus === "completed" && !canStartNew && (
-                <p className="mt-3 text-xs text-muted-foreground/30 font-sans">
-                  Maximum sessions reached. Contact{" "}
-                  <a href="mailto:inquiry@thewprotocol.online" className="text-foreground/40 hover:text-foreground border-b border-border/30 transition-colors">
-                    inquiry@thewprotocol.online
-                  </a>{" "}
-                  for further assistance.
-                </p>
-              )}
-            </div>
           )}
 
-          <div className="text-center mt-2 text-[10px] text-white/15 tracking-widest font-mono">
-            SHIFT+ENTER for newline
+          <div className="mt-2 flex items-center justify-between text-[10px] text-white/15 tracking-widest font-mono">
+            <span>SHIFT+ENTER for newline</span>
+            <span>Consent: {consentStatus}</span>
           </div>
         </div>
       </div>

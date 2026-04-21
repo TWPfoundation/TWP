@@ -5,7 +5,7 @@ import { SUBMISSION_STATUS, ASSESSMENT_STATUS } from "@/lib/lifecycle";
 
 export const metadata: Metadata = {
   title: "Admin · Dashboard",
-  description: "TWP Administrative Dashboard — corpus statistics and system health.",
+  description: "TWP Administrative Dashboard — corpus statistics and bridge health.",
 };
 
 const supabaseAdmin = createClient(
@@ -14,15 +14,13 @@ const supabaseAdmin = createClient(
 );
 
 export default async function AdminDashboardPage() {
-  // Auth is enforced by admin layout — no duplicate check needed here.
-
-  // Gather statistics
   const [
     { count: totalSubmissions },
     { count: acceptedCount },
     { count: rejectedCount },
     { count: pendingReviewCount },
-    { count: totalSessions },
+    { count: bridgeReadyCount },
+    { count: bridgeErrorCount },
     { data: assessments },
     { data: recentAudit },
   ] = await Promise.all([
@@ -30,27 +28,38 @@ export default async function AdminDashboardPage() {
     supabaseAdmin.from("witness_submissions").select("*", { count: "exact", head: true }).eq("submission_status", SUBMISSION_STATUS.ACCEPTED),
     supabaseAdmin.from("witness_submissions").select("*", { count: "exact", head: true }).in("submission_status", [SUBMISSION_STATUS.REJECTED_SIEVE, SUBMISSION_STATUS.REJECTED_QUALIFIER, SUBMISSION_STATUS.REJECTED_REVIEW]),
     supabaseAdmin.from("gate_assessments").select("*", { count: "exact", head: true }).eq("final_status", ASSESSMENT_STATUS.REVIEW),
-    supabaseAdmin.from("inquisitor_sessions").select("*", { count: "exact", head: true }),
+    supabaseAdmin.from("witness_runtime_links").select("*", { count: "exact", head: true }).in("bridge_status", ["ready", "active"]),
+    supabaseAdmin.from("witness_runtime_links").select("*", { count: "exact", head: true }).eq("bridge_status", "error"),
     supabaseAdmin.from("gate_assessments").select("tier2_cap_tags, tier2_rel_tags, tier2_felt_tags, tier2_specificity, tier2_counterfactual, tier2_relational, tier1_score, final_status, created_at"),
     supabaseAdmin.from("audit_log").select("action, created_at, metadata").order("created_at", { ascending: false }).limit(20),
   ]);
 
-  // Compute tag frequencies
   const tagFreq: Record<string, number> = {};
   const scores: { specificity: number[]; counterfactual: number[]; relational: number[] } = {
-    specificity: [], counterfactual: [], relational: [],
+    specificity: [],
+    counterfactual: [],
+    relational: [],
   };
 
   assessments?.forEach((a) => {
-    (a.tier2_cap_tags || []).forEach((t: string) => { tagFreq[`CAP:${t}`] = (tagFreq[`CAP:${t}`] || 0) + 1; });
-    (a.tier2_rel_tags || []).forEach((t: string) => { tagFreq[`REL:${t}`] = (tagFreq[`REL:${t}`] || 0) + 1; });
-    (a.tier2_felt_tags || []).forEach((t: string) => { tagFreq[`FELT:${t}`] = (tagFreq[`FELT:${t}`] || 0) + 1; });
+    (a.tier2_cap_tags || []).forEach((t: string) => {
+      tagFreq[`CAP:${t}`] = (tagFreq[`CAP:${t}`] || 0) + 1;
+    });
+    (a.tier2_rel_tags || []).forEach((t: string) => {
+      tagFreq[`REL:${t}`] = (tagFreq[`REL:${t}`] || 0) + 1;
+    });
+    (a.tier2_felt_tags || []).forEach((t: string) => {
+      tagFreq[`FELT:${t}`] = (tagFreq[`FELT:${t}`] || 0) + 1;
+    });
     if (a.tier2_specificity != null) scores.specificity.push(Number(a.tier2_specificity));
     if (a.tier2_counterfactual != null) scores.counterfactual.push(Number(a.tier2_counterfactual));
     if (a.tier2_relational != null) scores.relational.push(Number(a.tier2_relational));
   });
 
-  const avg = (arr: number[]) => arr.length > 0 ? Number((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : 0;
+  const avg = (arr: number[]) =>
+    arr.length > 0
+      ? Number((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1))
+      : 0;
 
   const topTags = Object.entries(tagFreq)
     .sort(([, a], [, b]) => b - a)
@@ -62,7 +71,8 @@ export default async function AdminDashboardPage() {
     accepted: acceptedCount ?? 0,
     rejected: rejectedCount ?? 0,
     pendingReview: pendingReviewCount ?? 0,
-    totalSessions: totalSessions ?? 0,
+    bridgeReady: bridgeReadyCount ?? 0,
+    bridgeErrors: bridgeErrorCount ?? 0,
     avgSpecificity: avg(scores.specificity),
     avgCounterfactual: avg(scores.counterfactual),
     avgRelational: avg(scores.relational),

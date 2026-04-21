@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import {
-  bootstrapWitnessRuntime,
   WitnessBridgeClient,
   WitnessBridgeConfigError,
   WitnessBridgeHttpError,
+  grantWitnessEntryConsent,
 } from '@/lib/witness-bridge/client';
 import {
   logWitnessBridgeAudit,
@@ -35,17 +35,21 @@ function toBridgeErrorResponse(error: unknown) {
     );
   }
 
-  return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  return NextResponse.json(
+    { error: 'Internal server error.' },
+    { status: 500 }
+  );
 }
 
-export async function GET() {
+export async function POST() {
   try {
     const supabase = await createClient();
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
-    if (!user) {
+    if (authError || !user) {
       return NextResponse.json(
         { error: 'Authentication required.' },
         { status: 401 }
@@ -54,12 +58,15 @@ export async function GET() {
 
     const { data: profile } = await supabaseAdmin
       .from('witness_profiles')
-      .select('id, status')
+      .select('id')
       .eq('supabase_user_id', user.id)
       .single();
 
     if (!profile) {
-      return NextResponse.json({ error: 'Profile not found.' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Witness profile not found.' },
+        { status: 404 }
+      );
     }
 
     const { data: acceptedTestimony } = await supabaseAdmin
@@ -72,19 +79,19 @@ export async function GET() {
       .single();
 
     if (!acceptedTestimony) {
-      return NextResponse.json({
-        bridgeStatus: 'pending',
-        consentStatus: 'unknown',
-        missingScopes: [],
-        session: null,
-        latestTestimony: null,
-        error:
-          'The Instrument is only accessible after your testimony has been accepted through The Gate.',
-      });
+      return NextResponse.json(
+        {
+          error:
+            'The Instrument is only accessible after your testimony has been accepted through The Gate.',
+        },
+        { status: 403 }
+      );
     }
 
     const bridge = new WitnessBridgeClient();
-    const runtime = await bootstrapWitnessRuntime(bridge, profile.id);
+    const runtime = await grantWitnessEntryConsent(bridge, {
+      witnessId: profile.id,
+    });
 
     await upsertWitnessRuntimeLink(supabaseAdmin, {
       witnessId: profile.id,
@@ -95,16 +102,13 @@ export async function GET() {
     });
 
     await logWitnessBridgeAudit(supabaseAdmin, {
-      action: 'witness.bridge.bootstrap',
+      action: 'witness.bridge.consent_granted',
       actorId: profile.id,
       witnessId: profile.id,
       metadata: {
-        profileStatus: profile.status,
         bridgeStatus: runtime.bridgeStatus,
         consentStatus: runtime.consentStatus,
         missingScopes: runtime.missingScopes,
-        sessionId: runtime.session?.id ?? null,
-        latestTestimonyId: runtime.latestTestimony?.id ?? null,
       },
     });
 
@@ -121,10 +125,9 @@ export async function GET() {
             segmentCount: runtime.latestTestimony.segments.length,
           }
         : null,
-      roundCount: runtime.session?.turns.length ?? 0,
     });
   } catch (error) {
-    console.error('Witness bridge bootstrap error:', error);
+    console.error('Witness bridge consent error:', error);
     return toBridgeErrorResponse(error);
   }
 }

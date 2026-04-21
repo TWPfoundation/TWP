@@ -14,6 +14,7 @@
  *   3. 20260410130600_phase2_tighten_rls_policies
  *   4. 20260410153030_phase3_inquisitor_schema
  *   5. 20260410211344_add_annotations_to_testimony_records
+ *   6. 20260421173000_m1_witness_runtime_links
  * 
  * Last reconciled: 2026-04-11 (session: 0ce279d6)
  */
@@ -238,4 +239,17 @@ export const consentRecords = pgTable('consent_records', {
   partnerSharing: boolean('partner_sharing').default(false),
   publicPublication: boolean('public_publication').default(false),
   lastUpdatedAt: timestamp('last_updated_at', { withTimezone: true }).defaultNow(),
+});
+
+/** Minimal accepted-witness bridge linkage state */
+export const witnessRuntimeLinks = pgTable('witness_runtime_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  witnessId: uuid('witness_id').references(() => witnessProfiles.id).unique().notNull(),
+  accessStatus: text('access_status').default('accepted').notNull(),
+  bridgeStatus: text('bridge_status').default('pending').notNull(),
+  runtimeConsentStatus: text('runtime_consent_status').default('unknown').notNull(),
+  lastBridgeError: text('last_bridge_error'),
+  lastBridgeSyncedAt: timestamp('last_bridge_synced_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
