@@ -375,11 +375,22 @@ export async function grantWitnessEntryConsent(
   client: WitnessBridgeClient,
   input: { witnessId: string; testimonyId?: string }
 ) {
+  const initialRuntime = await bootstrapWitnessRuntime(client, input.witnessId);
+  const resolvedTestimonyId = input.testimonyId ?? initialRuntime.latestTestimony?.id;
+  const missingScopes = getMissingRequiredConsentScopes(
+    initialRuntime.consentRecords,
+    resolvedTestimonyId
+  );
+
+  if (missingScopes.length === 0) {
+    return initialRuntime;
+  }
+
   await Promise.all(
-    REQUIRED_ENTRY_SCOPES.map((scope) =>
+    missingScopes.map((scope) =>
       client.appendConsent({
         witnessId: input.witnessId,
-        testimonyId: input.testimonyId,
+        testimonyId: resolvedTestimonyId,
         scope,
         status: "granted",
         actor: "witness",

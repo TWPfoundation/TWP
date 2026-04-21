@@ -30,13 +30,30 @@ export async function upsertWitnessRuntimeLink(
   patch: WitnessRuntimeLinkPatch
 ) {
   const now = new Date().toISOString();
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('witness_runtime_links')
+    .select(
+      'access_status, bridge_status, runtime_consent_status, last_bridge_error'
+    )
+    .eq('witness_id', patch.witnessId)
+    .maybeSingle();
+
+  if (existingError) {
+    throw existingError;
+  }
+
   const payload = {
     witness_id: patch.witnessId,
-    access_status: patch.accessStatus ?? 'accepted',
-    bridge_status: patch.bridgeStatus ?? 'pending',
-    runtime_consent_status: patch.runtimeConsentStatus ?? 'unknown',
+    access_status: patch.accessStatus ?? existing?.access_status ?? 'accepted',
+    bridge_status: patch.bridgeStatus ?? existing?.bridge_status ?? 'pending',
+    runtime_consent_status:
+      patch.runtimeConsentStatus ??
+      existing?.runtime_consent_status ??
+      'unknown',
     last_bridge_error:
-      patch.lastBridgeError === undefined ? null : patch.lastBridgeError,
+      patch.lastBridgeError !== undefined
+        ? patch.lastBridgeError
+        : existing?.last_bridge_error ?? null,
     last_bridge_synced_at: now,
     updated_at: now,
   };

@@ -108,8 +108,36 @@ describe("witness bridge bootstrap helpers", () => {
 
     const result = await grantWitnessEntryConsent(client, { witnessId: "wit-1" });
 
-    expect(client.appendConsent).toHaveBeenCalledTimes(2);
+    expect(client.appendConsent).toHaveBeenCalledTimes(0);
     expect(result.consentStatus).toBe("ready");
     expect(result.missingScopes).toEqual([]);
+  });
+
+  it("appends only the missing entry consent scopes", async () => {
+    const client = {
+      appendConsent: vi.fn().mockResolvedValue({}),
+      listConsent: vi
+        .fn()
+        .mockResolvedValueOnce([
+          makeConsentRecord("wit-1", "conversational", "granted"),
+        ])
+        .mockResolvedValueOnce([
+          makeConsentRecord("wit-1", "conversational", "granted"),
+          makeConsentRecord("wit-1", "retention", "granted"),
+        ]),
+      listWitnessTestimony: vi.fn().mockResolvedValue([]),
+      getWitnessSession: vi.fn(),
+    } as unknown as WitnessBridgeClient;
+
+    const result = await grantWitnessEntryConsent(client, { witnessId: "wit-1" });
+
+    expect(client.appendConsent).toHaveBeenCalledTimes(1);
+    expect(client.appendConsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        witnessId: "wit-1",
+        scope: "retention",
+      })
+    );
+    expect(result.consentStatus).toBe("ready");
   });
 });
