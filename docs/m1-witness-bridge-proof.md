@@ -1,5 +1,13 @@
 # Milestone 1 Local Proof Run
 
+## Status
+
+This is the historical Milestone 1 proof note.
+
+For the current repeatable accepted-witness proof after Milestone 2, use `m2-witness-revoke-proof.md`.
+
+The friction note at the end of this document reflects the Milestone 1 seam at that time and is not current operator guidance.
+
 ## Goal
 
 Prove one accepted-witness journey from `TWP` into `G_5.2`:
@@ -73,7 +81,7 @@ npm run dev
 - `data/witness/testimony/*.json` contains the governed testimony record
 - no dialogue turns were inserted into `TWP.inquisitor_sessions` or `TWP.inquisitor_turns`
 
-## Current Verified Friction
+## Historical Verified Friction At Milestone 1 Closeout
 
 - `TWP` now sends a shared secret on every bridge request.
 - `G_5.2` does not yet validate that shared secret.
