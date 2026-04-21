@@ -341,16 +341,24 @@ export default async function DashboardPage() {
               </div>
 
               <div className="border border-border/15 p-8 text-center">
-                <p className="text-sm text-muted-foreground/40 font-sans">
-                  Continue through{" "}
-                  <a
-                    href="/instrument"
-                    className="text-foreground/60 hover:text-foreground border-b border-border/30 hover:border-foreground/30 transition-colors"
-                  >
-                    The Instrument
-                  </a>{" "}
-                  to enter the governed Witness runtime.
-                </p>
+                {lifecycleStatus === "revoked" ? (
+                  <p className="text-sm text-muted-foreground/40 font-sans">
+                    Governed Witness access is currently disabled in the TWP
+                    control plane. Existing governed artifacts remain in G_5.2,
+                    but new entry is closed.
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground/40 font-sans">
+                    Continue through{" "}
+                    <a
+                      href="/instrument"
+                      className="text-foreground/60 hover:text-foreground border-b border-border/30 hover:border-foreground/30 transition-colors"
+                    >
+                      The Instrument
+                    </a>{" "}
+                    to enter the governed Witness runtime.
+                  </p>
+                )}
               </div>
             </div>
           )}

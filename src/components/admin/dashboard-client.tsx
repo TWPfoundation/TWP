@@ -1,6 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   BarChart,
   Bar,
@@ -34,6 +36,17 @@ interface DashboardStats {
   avgCounterfactual: number;
   avgRelational: number;
   topTags: Array<{ name: string; count: number }>;
+  runtimeControls: Array<{
+    witnessId: string;
+    pseudonym: string;
+    witnessStatus: string | null;
+    accessStatus: string;
+    bridgeStatus: string;
+    consentStatus: string;
+    lastBridgeError: string | null;
+    lastBridgeSyncedAt: string | null;
+    updatedAt: string | null;
+  }>;
   recentActivity: Array<{
     action: string;
     time: string;
@@ -76,6 +89,8 @@ function StatCard({
 }
 
 export function AdminDashboardClient({ stats }: { stats: DashboardStats }) {
+  const router = useRouter();
+  const [revokingWitnessId, setRevokingWitnessId] = useState<string | null>(null);
   const pieData = [
     { name: "Accepted", value: stats.accepted },
     { name: "Rejected", value: stats.rejected },
@@ -96,6 +111,42 @@ export function AdminDashboardClient({ stats }: { stats: DashboardStats }) {
   ];
 
   const PIE_COLORS = ["#22c55e", "#ef4444", "#eab308", "#6b7280"];
+
+  const handleRevoke = async (witnessId: string, pseudonym: string) => {
+    if (
+      !window.confirm(
+        `Revoke governed Witness access for ${pseudonym}? This disables future TWP entry but does not mutate governed artifacts in G_5.2.`
+      )
+    ) {
+      return;
+    }
+
+    setRevokingWitnessId(witnessId);
+
+    try {
+      const response = await fetch("/api/admin/witness-runtime/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          witnessId,
+          reason: "Revoked from admin dashboard during Milestone 2 operational control flow.",
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(payload?.error || "Witness revoke failed.");
+      }
+
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Witness revoke failed.");
+    } finally {
+      setRevokingWitnessId(null);
+    }
+  };
 
   return (
     <div className="pt-24 pb-16 px-8 space-y-10 max-w-6xl mx-auto">
@@ -281,6 +332,72 @@ export function AdminDashboardClient({ stats }: { stats: DashboardStats }) {
         <div className="pt-2 text-[10px] text-muted-foreground/30 font-mono">
           Bridge errors recorded: {stats.bridgeErrors}
         </div>
+      </motion.div>
+
+      <motion.div {...fadeIn} className="border border-border/10 bg-white/[0.02] p-6 space-y-4">
+        <h3 className="text-[10px] font-mono text-muted-foreground/40 uppercase tracking-widest">
+          Witness Runtime Controls
+        </h3>
+        {stats.runtimeControls.length > 0 ? (
+          <div className="space-y-3">
+            {stats.runtimeControls.map((entry) => {
+              const isRevoked = entry.accessStatus === "revoked";
+              const isRevoking = revokingWitnessId === entry.witnessId;
+
+              return (
+                <div
+                  key={entry.witnessId}
+                  className="border border-border/10 bg-black/10 p-4 space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="text-sm font-mono text-foreground/70">
+                        {entry.pseudonym}
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground/35">
+                        {entry.witnessId}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isRevoked || isRevoking}
+                      onClick={() => handleRevoke(entry.witnessId, entry.pseudonym)}
+                      className="px-3 py-2 border border-rose-800/30 text-[10px] uppercase tracking-widest text-rose-300/70 hover:text-rose-200 hover:border-rose-500/40 transition-colors disabled:opacity-40 disabled:hover:border-rose-800/30"
+                    >
+                      {isRevoked ? "Revoked" : isRevoking ? "Revoking..." : "Revoke / Disable"}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-[10px] font-mono text-muted-foreground/45">
+                    <div>Witness: {entry.witnessStatus ?? "unknown"}</div>
+                    <div>Access: {entry.accessStatus}</div>
+                    <div>Bridge: {entry.bridgeStatus}</div>
+                    <div>Consent: {entry.consentStatus}</div>
+                    <div>
+                      Synced:{" "}
+                      {entry.lastBridgeSyncedAt
+                        ? new Date(entry.lastBridgeSyncedAt).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "never"}
+                    </div>
+                  </div>
+                  <div className="text-[10px] font-mono text-muted-foreground/35">
+                    {entry.lastBridgeError
+                      ? `Last bridge error: ${entry.lastBridgeError}`
+                      : "No bridge error recorded."}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground/30">
+            No accepted-witness linkage rows available yet.
+          </p>
+        )}
       </motion.div>
     </div>
   );

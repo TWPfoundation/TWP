@@ -27,6 +27,7 @@ export default async function AdminDashboardPage() {
     { count: bridgeErrorCount },
     { data: assessments },
     { data: recentAudit },
+    { data: runtimeLinks },
   ] = await Promise.all([
     supabaseAdmin.from("witness_submissions").select("*", { count: "exact", head: true }),
     supabaseAdmin.from("witness_submissions").select("*", { count: "exact", head: true }).eq("submission_status", SUBMISSION_STATUS.ACCEPTED),
@@ -40,7 +41,26 @@ export default async function AdminDashboardPage() {
     supabaseAdmin.from("witness_runtime_links").select("*", { count: "exact", head: true }).eq("bridge_status", "error"),
     supabaseAdmin.from("gate_assessments").select("tier2_cap_tags, tier2_rel_tags, tier2_felt_tags, tier2_specificity, tier2_counterfactual, tier2_relational, tier1_score, final_status, created_at"),
     supabaseAdmin.from("audit_log").select("action, created_at, metadata").order("created_at", { ascending: false }).limit(20),
+    supabaseAdmin
+      .from("witness_runtime_links")
+      .select(
+        "witness_id, access_status, bridge_status, runtime_consent_status, last_bridge_error, last_bridge_synced_at, updated_at"
+      )
+      .order("updated_at", { ascending: false })
+      .limit(12),
   ]);
+
+  const runtimeWitnessIds = (runtimeLinks ?? []).map((entry) => entry.witness_id);
+  const { data: runtimeProfiles } = runtimeWitnessIds.length
+    ? await supabaseAdmin
+        .from("witness_profiles")
+        .select("id, pseudonym, status")
+        .in("id", runtimeWitnessIds)
+    : { data: [] as Array<{ id: string; pseudonym: string; status: string | null }> };
+
+  const runtimeProfileById = new Map(
+    (runtimeProfiles ?? []).map((profile) => [profile.id, profile])
+  );
 
   const tagFreq: Record<string, number> = {};
   const scores: { specificity: number[]; counterfactual: number[]; relational: number[] } = {
@@ -89,6 +109,21 @@ export default async function AdminDashboardPage() {
     avgCounterfactual: avg(scores.counterfactual),
     avgRelational: avg(scores.relational),
     topTags,
+    runtimeControls: (runtimeLinks ?? []).map((entry) => {
+      const profile = runtimeProfileById.get(entry.witness_id);
+
+      return {
+        witnessId: entry.witness_id,
+        pseudonym: profile?.pseudonym ?? "Unknown",
+        witnessStatus: profile?.status ?? null,
+        accessStatus: entry.access_status,
+        bridgeStatus: entry.bridge_status,
+        consentStatus: entry.runtime_consent_status,
+        lastBridgeError: entry.last_bridge_error,
+        lastBridgeSyncedAt: entry.last_bridge_synced_at,
+        updatedAt: entry.updated_at,
+      };
+    }),
     recentActivity: (recentAudit || []).map((r) => ({
       action: r.action,
       time: r.created_at,

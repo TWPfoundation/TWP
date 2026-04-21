@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { InstrumentClient } from "./instrument-client";
+import { WITNESS_RUNTIME_ACCESS_STATUS } from "@/lib/witness-bridge/lifecycle";
 
 export const metadata: Metadata = {
   title: "The Instrument",
@@ -32,6 +33,37 @@ export default async function InstrumentPage() {
 
   if (!profile) {
     redirect("/gate");
+  }
+
+  const { data: runtimeLink } = await supabaseAdmin
+    .from("witness_runtime_links")
+    .select("access_status")
+    .eq("witness_id", profile.id)
+    .maybeSingle();
+
+  if (runtimeLink?.access_status === WITNESS_RUNTIME_ACCESS_STATUS.REVOKED) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-md space-y-6">
+          <h1 className="text-3xl font-light tracking-widest text-foreground text-glow uppercase">
+            The Instrument
+          </h1>
+          <p className="text-muted-foreground/60 font-sans text-sm leading-relaxed">
+            Governed Witness access has been disabled in the TWP control plane.
+            Runtime artifacts remain preserved in G_5.2, but new entry and turn
+            actions are closed.
+          </p>
+          <div className="flex flex-col items-center gap-3 pt-4">
+            <a
+              href="/dashboard"
+              className="text-xs text-muted-foreground/50 hover:text-foreground transition-colors font-serif tracking-widest uppercase border-b border-transparent hover:border-foreground/20 pb-px"
+            >
+              Return to Dashboard
+            </a>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   // Gate passage check — find accepted testimony
