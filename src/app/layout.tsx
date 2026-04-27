@@ -3,6 +3,7 @@ import { EB_Garamond, Cinzel } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/ui/site-header";
 import { SiteFooter } from "@/components/ui/site-footer";
+import { Analytics } from "@vercel/analytics/next";
 
 const ebGaramond = EB_Garamond({
   variable: "--font-eb-garamond",
@@ -100,6 +101,7 @@ export default function RootLayout({
           {children}
         </div>
         <SiteFooter />
+        <Analytics />
       </body>
     </html>
   );
