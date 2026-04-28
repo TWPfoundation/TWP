@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { AdminSidebar } from "@/components/admin/sidebar";
@@ -12,12 +13,18 @@ const supabaseAdmin = createAdminClient(
  * Admin layout with sidebar navigation.
  * Protects all /admin/* routes via Supabase Auth session + admin_roles check.
  * No cookie passphrase — hard-cut to identity-based auth.
+ *
+ * Security: calling headers() opts this layout out of Next.js static caching,
+ * ensuring admin responses are never served from a shared CDN/proxy cache.
  */
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Calling headers() forces dynamic rendering (no-store semantics)
+  await headers();
+
   const supabase = await createClient();
   const {
     data: { user },
