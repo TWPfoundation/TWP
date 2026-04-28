@@ -1,19 +1,68 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
+type EmailOtpType =
+  | "signup"
+  | "invite"
+  | "magiclink"
+  | "recovery"
+  | "email_change"
+  | "email";
+
+const emailOtpTypes = new Set<string>([
+  "signup",
+  "invite",
+  "magiclink",
+  "recovery",
+  "email_change",
+  "email",
+]);
+
+function isEmailOtpType(value: string | null): value is EmailOtpType {
+  return value !== null && emailOtpTypes.has(value);
+}
+
+function getLocalRedirectPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/gate";
+  }
+
+  return value;
+}
+
+function redirectTo(path: string, origin: string) {
+  const response = NextResponse.redirect(new URL(path, origin));
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
+}
+
 /**
  * GET /auth/callback
  * 
- * Handles the Supabase magic link callback.
- * Exchanges the token_hash for a session, then redirects to /gate.
+ * Handles Supabase email auth callbacks.
+ * Exchanges PKCE auth codes for a session, with token_hash verification as a
+ * fallback for custom email templates.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
   const token_hash = searchParams.get("token_hash");
-  const type = searchParams.get("type") as "email" | "magiclink" | null;
-  const next = searchParams.get("next") ?? "/gate";
+  const type = searchParams.get("type");
+  const next = getLocalRedirectPath(searchParams.get("next"));
 
-  if (token_hash && type) {
+  if (code) {
+    const supabase = await createClient();
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (!error) {
+      return redirectTo(next, origin);
+    }
+
+    console.error("Auth callback code exchange error:", error.message);
+  }
+
+  if (token_hash && isEmailOtpType(type)) {
     const supabase = await createClient();
 
     const { error } = await supabase.auth.verifyOtp({
@@ -23,14 +72,12 @@ export async function GET(request: NextRequest) {
 
     if (!error) {
       // Authenticated — redirect to the Gate (or wherever `next` points)
-      return NextResponse.redirect(new URL(next, origin));
+      return redirectTo(next, origin);
     }
 
     console.error("Auth callback verification error:", error.message);
   }
 
   // If verification failed, redirect to login with error hint
-  return NextResponse.redirect(
-    new URL("/login?error=verification_failed", origin)
-  );
+  return redirectTo("/login?error=verification_failed", origin);
 }

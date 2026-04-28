@@ -16,8 +16,36 @@ export default function LoginClient() {
   const supabase = createClient();
   const searchParams = useSearchParams();
 
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+
+    if (!accessToken || !refreshToken) return;
+
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}`
+    );
+
+    supabase.auth
+      .setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      })
+      .then(({ error }) => {
+        if (error) {
+          setError("Verification link expired or was already used. Please request a new one.");
+          return;
+        }
+
+        setStep("success");
+        window.location.replace("/gate");
+      });
+  }, [supabase.auth]);
+
   // Check for verification error from callback
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (searchParams.get("error") === "verification_failed") {
       setError("Verification link expired or was already used. Please request a new one.");
@@ -44,20 +72,27 @@ export default function LoginClient() {
     setIsLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      const response = await fetch("/api/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
 
-    setIsLoading(false);
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setError(
+          body?.error || "Unable to send login link. Please try again."
+        );
+        return;
+      }
 
-    if (error) {
-      setError(error.message);
-    } else {
       setStep("sent");
+    } catch (err) {
+      console.error("Unexpected login email error:", err);
+      setError("Unable to send login link. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -93,7 +128,10 @@ export default function LoginClient() {
                 id="login-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError(null);
+                }}
                 placeholder="your.email@example.com"
                 className="w-full bg-transparent border-b border-border text-center py-4 px-6 text-foreground font-sans text-lg focus:outline-none focus:border-foreground transition-colors duration-500 placeholder:text-muted-foreground/30"
                 required

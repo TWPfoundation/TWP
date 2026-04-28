@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Lock, BookOpen, Users, AlertTriangle, FileText, Shield } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Lock, BookOpen, Users, AlertTriangle, Shield } from "lucide-react";
+import { useEffect, useState } from "react";
 import { AnimatedParticles } from "@/components/ui/animated-particles";
 import { Clock1158 } from "@/components/protocol/clock-1158";
 import Link from "next/link";
@@ -34,36 +34,66 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const supabase = createClient();
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+
+    if (!accessToken || !refreshToken) return;
+
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}`
+    );
+
+    const supabase = createClient();
+    supabase.auth
+      .setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      })
+      .then(({ error }) => {
+        if (error) {
+          setSubmitError(
+            "Verification link expired or was already used. Please request a new one."
+          );
+          return;
+        }
+
+        window.location.replace("/gate");
+      });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
-      // 1. Register email in summons table
-      const { error } = await supabase
-        .from("summons")
-        .insert([{ email }]);
+      const response = await fetch("/api/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
 
-      if (error && error.code !== "23505") {
-        console.error("Error submitting summons:", error);
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setSubmitError(
+          body?.error || "Unable to send authentication link. Please try again."
+        );
+        return;
       }
 
-      // 2. Also send a magic link so the summons email IS the authentication
-      await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
+      setIsSubmitted(true);
     } catch (err) {
       console.error("Unexpected error:", err);
+      setSubmitError("Unable to send authentication link. Please try again.");
     } finally {
       setIsSubmitting(false);
-      setIsSubmitted(true);
     }
   };
 
@@ -100,13 +130,25 @@ export default function Home() {
                   id="email-summons"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (submitError) setSubmitError(null);
+                  }}
                   placeholder="Enter your email to request the assessment"
                   className="w-full bg-transparent border-b border-border text-center py-4 px-6 text-foreground font-sans text-lg focus:outline-none focus:border-foreground transition-colors duration-500 placeholder:text-muted-foreground/30"
                   required
                 />
                 <span className="absolute bottom-0 left-0 w-0 h-[1px] bg-foreground transition-all duration-700 ease-out group-focus-within:w-full" />
               </div>
+
+              {submitError && (
+                <p
+                  role="alert"
+                  className="text-sm text-red-300/80 font-sans leading-relaxed"
+                >
+                  {submitError}
+                </p>
+              )}
 
               <button
                 id="submit-summons"
