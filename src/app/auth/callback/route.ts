@@ -71,6 +71,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (!error) {
+      // Recovery sessions must go to the password reset form, not the app.
+      if (type === "recovery") {
+        return redirectTo("/admin/reset-password", origin);
+      }
       // Authenticated — redirect to the Gate (or wherever `next` points)
       return redirectTo(next, origin);
     }
