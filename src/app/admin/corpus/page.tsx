@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth/admin";
 import { CorpusClient } from "@/components/admin/corpus-client";
 
 export const metadata: Metadata = {
@@ -13,7 +15,8 @@ const supabaseAdmin = createClient(
 );
 
 export default async function CorpusPage() {
-  // Auth is enforced by admin layout — no duplicate check needed here.
+  const auth = await requireAdmin();
+  if (auth.error) redirect("/admin/login");
 
   // Fetch accepted testimonies with their assessments
   const { data: testimonies, error } = await supabaseAdmin

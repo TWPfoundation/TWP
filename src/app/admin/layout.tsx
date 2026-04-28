@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
@@ -10,31 +9,37 @@ const supabaseAdmin = createAdminClient(
 );
 
 /**
- * Admin layout with sidebar navigation.
- * Protects all /admin/* routes via Supabase Auth session + admin_roles check.
- * No cookie passphrase — hard-cut to identity-based auth.
+ * Admin layout — sidebar chrome only.
  *
- * Security: calling headers() opts this layout out of Next.js static caching,
- * ensuring admin responses are never served from a shared CDN/proxy cache.
+ * This layout NEVER redirects. Redirecting to /admin/login from here
+ * creates an infinite loop because /admin/login is itself under this layout.
+ *
+ * Auth enforcement is handled at the page level:
+ *   - Protected pages call requireAdmin() and redirect themselves.
+ *   - The login page handles its own auth state client-side.
+ *
+ * This layout only adds the sidebar chrome when the user is a verified admin.
+ * Calling headers() forces dynamic rendering (no CDN/proxy caching).
  */
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Calling headers() forces dynamic rendering (no-store semantics)
-  await headers();
+  await headers(); // opt out of static caching
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // No session — show page as-is (login page renders its form; protected
+  // pages redirect themselves via their own requireAdmin() calls).
   if (!user) {
-    redirect("/admin/login");
+    return <>{children}</>;
   }
 
-  // Check admin_roles table
+  // Authenticated — check for an admin role.
   const { data: adminRole } = await supabaseAdmin
     .from("admin_roles")
     .select("role, email")
@@ -42,12 +47,13 @@ export default async function AdminLayout({
     .eq("is_active", true)
     .single();
 
+  // No admin role — render without sidebar (e.g. login page after sign-in
+  // with a non-admin account).
   if (!adminRole) {
-    // User is authenticated but not an admin — show children (login page
-    // or access denied) without the admin sidebar
     return <>{children}</>;
   }
 
+  // Verified admin — render with sidebar.
   return (
     <div className="flex min-h-screen">
       <AdminSidebar role={adminRole.role} email={adminRole.email} />

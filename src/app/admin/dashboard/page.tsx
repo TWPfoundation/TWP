@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth/admin";
 import { AdminDashboardClient } from "@/components/admin/dashboard-client";
 import { SUBMISSION_STATUS, ASSESSMENT_STATUS } from "@/lib/lifecycle";
 
@@ -14,6 +16,9 @@ const supabaseAdmin = createClient(
 );
 
 export default async function AdminDashboardPage() {
+  const auth = await requireAdmin();
+  if (auth.error) redirect("/admin/login");
+
   const [
     { count: totalSubmissions },
     { count: acceptedCount },

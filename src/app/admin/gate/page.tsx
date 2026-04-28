@@ -1,4 +1,6 @@
 import { createClient as createAdminClientDirect } from "@supabase/supabase-js";
+import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth/admin";
 import { AdminGateQueue } from "@/components/admin/gate-queue";
 import type { Metadata } from "next";
 
@@ -8,7 +10,8 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminGatePage() {
-  // Auth is enforced by admin layout — no duplicate check needed here.
+  const auth = await requireAdmin();
+  if (auth.error) redirect("/admin/login");
   const supabaseAdmin = createAdminClientDirect(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
